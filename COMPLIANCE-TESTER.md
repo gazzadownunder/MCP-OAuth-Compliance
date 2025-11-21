@@ -7,6 +7,9 @@ A web-based tool to test MCP server compliance with the OAuth 2.1 authorization 
 - **RFC 6749**: OAuth 2.0 Authorization Framework
 - **OAuth 2.1**: Authorization Code Flow with PKCE
 - **RFC 8707**: Resource Indicators for OAuth 2.0
+- **RFC 9068**: JWT Profile for OAuth 2.0 Access Tokens
+- **RFC 7519**: JSON Web Token (JWT)
+- **RFC 7515**: JSON Web Signature (JWS)
 
 ## Features
 
@@ -33,8 +36,28 @@ npm install
 npm run compliance-tester
 ```
 
+Or install globally and run as CLI:
+
+```bash
+npm install -g .
+mcp-oauth-compliance
+
+# Or from GitHub
+npm install -g github:gazzadownunder/mcp-oauth-compliance
+mcp-oauth-compliance
+```
+
+**CLI Options:**
+```bash
+mcp-oauth-compliance [options]
+
+Options:
+  -p, --port <number>  Server port (default: 3001, or PORT env var)
+  -h, --help           Show help message
+```
+
 This will:
-1. Start the backend API server on port 3001
+1. Start the backend API server (default port 3001)
 2. Automatically open your default browser
 3. Display the compliance testing interface
 
@@ -68,6 +91,9 @@ When enabled, additional fields appear:
 - **Client ID**: Your pre-registered client_id (required)
 - **Client Secret**: Optional client secret for confidential clients
 - **OAuth Scopes**: Space-separated scopes (optional - server uses defaults if not specified)
+- **Redirect URI**: Full redirect URI registered with your IDP (e.g., `http://localhost:8082/`)
+
+**Note**: When "Use Pre-Configured Client" is enabled, "Interactive OAuth Flow" is automatically enabled.
 
 ## Complete Test Reference
 
@@ -314,6 +340,7 @@ Health check endpoint.
 | `clientSecret` | string | - | Pre-configured client secret |
 | `scope` | string | - | OAuth scopes (space-separated) |
 | `callbackPort` | number | 3000 | OAuth callback server port |
+| `redirectUri` | string | - | Full redirect URI (overrides callbackPort) |
 | `resourceUri` | string | - | RFC 8707 resource indicator |
 | `timeout` | number | 30000 | Request timeout (ms) |
 
@@ -340,6 +367,13 @@ On Windows, the tester uses `start ""` command with empty title to open URLs cor
 - Check if the callback port is available
 - Verify browser isn't blocking popups
 - Copy the URL from console output manually
+
+### Callback Port Already in Use
+
+If you see "Port X is already in use" error:
+- Choose a different callback port in the options
+- Close any application using that port
+- Ensure your redirect URI matches the callback port
 
 ### AS Metadata Not Found
 
@@ -423,6 +457,29 @@ For full compliance (no warnings):
 ### Fallback Discovery (MCP 4.2.2)
 - Individual path failures show as warnings (not failures)
 - Overall test passes if any path succeeds
+
+### JWKS Fallback Discovery
+- If `jwks_uri` not in AS metadata, tries fallback endpoints:
+  1. `{issuer}/.well-known/jwks.json`
+  2. `{host}/.well-known/jwks.json`
+  3. `{issuer}/protocol/openid-connect/certs` (Keycloak convention)
+
+### Redirect URI Configuration
+- New `redirectUri` option for pre-configured clients
+- Automatically extracts port from redirect URI
+- Callback server accepts both `/` and `/callback` paths
+
+### Callback Server Error Handling
+- Fails fast if callback port is already in use
+- Reports clear error message to frontend
+- Properly cleans up server on success, error, or timeout
+
+### Auto-Enable Interactive Auth
+- Enabling "Use Pre-Configured Client" automatically enables "Interactive OAuth Flow"
+
+### Decoded JWT Display
+- JWT validation now includes full decoded token (header + payload) at end of tests
+- Each claim displayed on separate lines for readability
 
 ## Related Documentation
 

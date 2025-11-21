@@ -1,7 +1,6 @@
 import {
   ProtectedResourceMetadata,
   ProtectedResourceMetadataSchema,
-  getProtectedResourceMetadataUri,
   parseWWWAuthenticateHeader
 } from '../types/protected-resource-metadata.js';
 

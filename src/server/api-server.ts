@@ -40,7 +40,7 @@ export class ComplianceAPIServer {
 
   private setupRoutes() {
     // Health check
-    this.app.get('/api/health', (req: Request, res: Response) => {
+    this.app.get('/api/health', (_req: Request, res: Response) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
@@ -170,7 +170,7 @@ export class ComplianceAPIServer {
     });
 
     // Serve frontend (catch-all route for SPA)
-    this.app.get('/', (req: Request, res: Response) => {
+    this.app.get('/', (_req: Request, res: Response) => {
       res.sendFile(path.join(__dirname, '../../public/index.html'));
     });
   }

@@ -3,7 +3,7 @@
  * Tests compliance with RFC 9728, RFC 8414, RFC 7591, and OAuth 2.1
  */
 
-export type TestStatus = 'pass' | 'fail' | 'skip' | 'warning' | 'pending';
+export type TestStatus = 'pass' | 'fail' | 'skip' | 'warning' | 'pending' | 'info';
 
 export interface ComplianceTestResult {
   id: string;
@@ -59,6 +59,7 @@ export interface ServerTestConfig {
   skipOAuthFlow?: boolean;
   interactiveAuth?: boolean; // Enable interactive OAuth flow testing (requires browser)
   callbackPort?: number; // Port for OAuth callback server (default: 3000)
+  redirectUri?: string; // Full redirect URI (e.g., http://localhost:8082/) - overrides callbackPort
   resourceUri?: string; // Resource URI for RFC 8707 testing
   // Pre-configured client mode - bypasses DCR, uses browser for IDP authentication
   usePreConfiguredClient?: boolean; // Use pre-configured client_id instead of DCR

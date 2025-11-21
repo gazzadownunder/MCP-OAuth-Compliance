@@ -1,6 +1,6 @@
 # MCP OAuth Compliance Tester
 
-Web-based tool for testing MCP server OAuth compliance with RFC 9728, RFC 8414, RFC 7591, and OAuth 2.1.
+Web-based tool for testing MCP server OAuth compliance with RFC 9728, RFC 8414, RFC 7591, RFC 9068, RFC 7519, RFC 7515, and OAuth 2.1.
 
 ## Quick Start
 
@@ -10,6 +10,45 @@ npm start
 ```
 
 Open `http://localhost:3456` in your browser.
+
+### Global Installation (CLI)
+
+Install globally to use as a command-line tool:
+
+```bash
+npm install -g .
+mcp-oauth-compliance
+```
+
+Or install directly from GitHub:
+
+```bash
+npm install -g github:gazzadownunder/mcp-oauth-compliance
+mcp-oauth-compliance
+```
+
+Or run directly via npx:
+
+```bash
+npx github:gazzadownunder/mcp-oauth-compliance
+```
+
+### CLI Options
+
+```bash
+mcp-oauth-compliance [options]
+
+Options:
+  -p, --port <number>  Server port (default: 3001, or PORT env var)
+  -h, --help           Show help message
+```
+
+Examples:
+```bash
+mcp-oauth-compliance --port 3000
+mcp-oauth-compliance -p 9000
+PORT=4000 mcp-oauth-compliance
+```
 
 ## Features
 
@@ -28,7 +67,8 @@ Open `http://localhost:3456` in your browser.
 | **Skip OAuth Flow** | Skip token acquisition tests |
 | **Interactive Auth** | Enable browser-based OAuth flow |
 | **Pre-configured Client** | Use existing client credentials instead of DCR |
-| **Callback Port** | Port for OAuth callback (default: 3456) |
+| **Callback Port** | Port for OAuth callback (default: 3000) |
+| **Redirect URI** | Full redirect URI registered with your IDP |
 | **Resource URI** | Resource indicator for RFC 8707 |
 | **Client ID/Secret** | Pre-configured client credentials |
 | **Scope** | OAuth scopes to request |

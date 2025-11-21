@@ -1,9 +1,12 @@
 {
   "name": "mcp-oauth-compliance",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Web-based tool for testing MCP server OAuth compliance with RFC 9728, RFC 8414, RFC 7591, and OAuth 2.1",
   "type": "module",
   "main": "dist/compliance-tester.js",
+  "bin": {
+    "mcp-oauth-compliance": "dist/compliance-tester.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "tsx src/compliance-tester.ts",

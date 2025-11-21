@@ -1396,8 +1396,13 @@ export class MCPComplianceTester {
     if (this.config.usePreConfiguredClient && this.config.clientId) {
       clientId = this.config.clientId;
       // clientSecret available at this.config.clientSecret if needed for confidential clients
-      const callbackPort = this.config.callbackPort || 3000;
-      redirectUri = `http://localhost:${callbackPort}/callback`;
+      // Use explicit redirectUri if provided, otherwise construct from callbackPort
+      if (this.config.redirectUri) {
+        redirectUri = this.config.redirectUri;
+      } else {
+        const callbackPort = this.config.callbackPort || 3000;
+        redirectUri = `http://localhost:${callbackPort}/callback`;
+      }
     } else if (clientRegistration && clientRegistration.client_id) {
       clientId = clientRegistration.client_id as string;
       // clientSecret available at clientRegistration.client_secret if needed
@@ -1413,7 +1418,16 @@ export class MCPComplianceTester {
       return;
     }
 
-    const callbackPort = this.config.callbackPort || 3000;
+    // Extract port from redirectUri or use callbackPort config
+    let callbackPort = this.config.callbackPort || 3000;
+    if (this.config.redirectUri) {
+      try {
+        const redirectUrl = new URL(this.config.redirectUri);
+        callbackPort = parseInt(redirectUrl.port, 10) || (redirectUrl.protocol === 'https:' ? 443 : 80);
+      } catch {
+        // Invalid URL, use default port
+      }
+    }
 
     // Generate PKCE parameters
     const pkce = generatePKCEParams();
@@ -1422,10 +1436,24 @@ export class MCPComplianceTester {
     console.log('\n🔐 Starting interactive OAuth flow...');
     console.log('You will be redirected to your browser to authenticate.');
 
+    // Start callback server first - this will fail fast if port is in use
+    let callbackServer: Awaited<ReturnType<typeof startCallbackServer>> | undefined;
     try {
-      // Start callback server
-      const callbackPromise = startCallbackServer(callbackPort);
+      callbackServer = await startCallbackServer(callbackPort);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.addResult({
+        id: 'oauth-4.3',
+        category,
+        requirement: 'OAuth callback server can start',
+        status: 'fail',
+        message: `Failed to start callback server: ${errorMessage}`,
+        details: { port: callbackPort, error: errorMessage },
+      });
+      return;
+    }
 
+    try {
       // Build authorization URL
       const authUrl = new URL(authorizationEndpoint);
       authUrl.searchParams.set('response_type', 'code');
@@ -1451,13 +1479,26 @@ export class MCPComplianceTester {
 
       console.log(`\n📱 Opening browser to: ${authUrl.toString()}\n`);
 
-      // Open browser - Windows needs empty title "" before URL
-      const openCommand = process.platform === 'win32' ? 'start ""' :
-                         process.platform === 'darwin' ? 'open' : 'xdg-open';
-      exec(`${openCommand} "${authUrl.toString()}"`);
+      // Open browser
+      const authUrlString = authUrl.toString();
+      if (process.platform === 'win32') {
+        // Windows: use start command with proper escaping
+        exec(`start "" "${authUrlString}"`, (error) => {
+          if (error) {
+            console.error('Failed to open browser:', error.message);
+          }
+        });
+      } else {
+        const openCommand = process.platform === 'darwin' ? 'open' : 'xdg-open';
+        exec(`${openCommand} "${authUrlString}"`, (error) => {
+          if (error) {
+            console.error('Failed to open browser:', error.message);
+          }
+        });
+      }
 
       // Wait for callback
-      const callback = await callbackPromise;
+      const callback = await callbackServer.waitForCallback();
 
       if (callback.error) {
         this.addResult({
@@ -1518,6 +1559,11 @@ export class MCPComplianceTester {
         status: 'fail',
         message: `OAuth flow failed: ${error instanceof Error ? error.message : String(error)}`,
       });
+    } finally {
+      // Ensure callback server is closed
+      if (callbackServer) {
+        callbackServer.close();
+      }
     }
   }
 
@@ -1859,7 +1905,38 @@ export class MCPComplianceTester {
     });
 
     // Test 5.9: JWKS endpoint available and reachable (OPTIONAL per RFC 8414)
-    const jwksUri = asMetadata?.jwks_uri;
+    let jwksUri = asMetadata?.jwks_uri;
+    let jwksSource = 'metadata';
+
+    // Fallback: try various JWKS endpoint patterns if jwks_uri not in metadata
+    if (!jwksUri && asMetadata?.issuer) {
+      const issuer = (asMetadata.issuer as string).replace(/\/$/, ''); // Remove trailing slash
+      const issuerUrl = new URL(issuer);
+      const baseUrl = issuerUrl.origin; // host:port only
+
+      // List of JWKS URIs to try in order
+      const jwksUrisToTry = [
+        // Full issuer path + well-known (e.g., http://host:8080/realms/name/.well-known/jwks.json)
+        { uri: `${issuer}/.well-known/jwks.json`, source: 'well-known-issuer-path' },
+        // Host-only + well-known (e.g., http://host:8080/.well-known/jwks.json)
+        { uri: `${baseUrl}/.well-known/jwks.json`, source: 'well-known-host-only' },
+        // Keycloak convention with full path (e.g., http://host:8080/realms/name/protocol/openid-connect/certs)
+        { uri: `${issuer}/protocol/openid-connect/certs`, source: 'keycloak-convention' },
+      ];
+
+      for (const { uri, source } of jwksUrisToTry) {
+        try {
+          const fallbackResponse = await this.fetchWithTimeout(uri);
+          if (fallbackResponse.ok) {
+            jwksUri = uri;
+            jwksSource = source;
+            break;
+          }
+        } catch {
+          // Try next URI
+        }
+      }
+    }
 
     if (!jwksUri) {
       this.addResult({
@@ -1867,7 +1944,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'JWKS URI available in AS metadata (OPTIONAL)',
         status: 'warning',
-        message: 'No jwks_uri in authorization server metadata - signature verification not possible',
+        message: 'No jwks_uri in authorization server metadata and no fallback JWKS endpoint found - signature verification not possible',
         rfcReference: 'RFC 8414 Section 2',
         rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-2',
       });
@@ -1883,15 +1960,22 @@ export class MCPComplianceTester {
       try {
         const jwksResponse = await this.fetchWithTimeout(jwksUri);
 
+        // Report how JWKS was discovered
+        const sourceMessage = jwksSource === 'metadata'
+          ? 'JWKS URI from AS metadata'
+          : jwksSource === 'well-known-fallback'
+            ? 'JWKS URI discovered via /.well-known/jwks.json fallback'
+            : 'JWKS URI discovered via Keycloak convention (/protocol/openid-connect/certs)';
+
         this.addResult({
           id: 'jwt-5.9',
           category,
-          requirement: 'JWKS URI is reachable',
+          requirement: 'JWKS URI available',
           status: jwksResponse.ok ? 'pass' : 'fail',
           message: jwksResponse.ok
-            ? `JWKS endpoint accessible at ${jwksUri}`
-            : `JWKS endpoint returned HTTP ${jwksResponse.status}`,
-          details: { jwks_uri: jwksUri, status: jwksResponse.status },
+            ? `${sourceMessage} - endpoint accessible at ${jwksUri}`
+            : `${sourceMessage} - endpoint returned HTTP ${jwksResponse.status}`,
+          details: { jwks_uri: jwksUri, status: jwksResponse.status, source: jwksSource },
           rfcReference: 'RFC 7517',
           rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7517.html',
         });
@@ -2031,6 +2115,27 @@ export class MCPComplianceTester {
       details: { aud },
       rfcReference: 'RFC 9068 Section 2.2',
       rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2',
+    });
+
+    // Final: Include decoded access token for reference
+    const formatClaims = (obj: Record<string, unknown>): Record<string, string> => {
+      const formatted: Record<string, string> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        formatted[key] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      }
+      return formatted;
+    };
+
+    this.addResult({
+      id: 'jwt-5.99',
+      category,
+      requirement: 'Decoded JWT Access Token',
+      status: 'info',
+      message: 'Full decoded JWT access token for reference',
+      details: {
+        header: formatClaims(header),
+        payload: formatClaims(payload),
+      },
     });
 
     console.log('✅ JWT validation tests completed\n');

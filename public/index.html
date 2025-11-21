@@ -451,6 +451,7 @@
             overflow-y: auto;
             color: #a0a0a0;
             border: 1px solid #3a3a4e;
+            white-space: pre-wrap;
         }
 
         .footer {
@@ -599,6 +600,16 @@
                                 >
                                 <small>Space-separated list of scopes (default: "openid profile email")</small>
                             </div>
+                            <div>
+                                <label for="redirectUri">Redirect URI</label>
+                                <input
+                                    type="text"
+                                    id="redirectUri"
+                                    name="redirectUri"
+                                    placeholder="http://localhost:3000/"
+                                >
+                                <small>Full redirect URI registered with your IDP (e.g., http://localhost:8082/)</small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -674,6 +685,17 @@
             });
         });
 
+        // Auto-enable interactive auth when pre-configured client is selected
+        document.getElementById('usePreConfiguredClient').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                const interactiveAuth = document.getElementById('interactiveAuth');
+                if (!interactiveAuth.checked) {
+                    interactiveAuth.checked = true;
+                    interactiveAuth.dispatchEvent(new Event('change'));
+                }
+            }
+        });
+
         document.getElementById('testForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -707,6 +729,7 @@
                 const clientId = document.getElementById('clientId').value;
                 const clientSecret = document.getElementById('clientSecret').value;
                 const scope = document.getElementById('scope').value;
+                const redirectUri = document.getElementById('redirectUri').value;
 
                 if (!clientId) {
                     alert('Pre-configured client mode requires a client ID');
@@ -719,6 +742,9 @@
                 }
                 if (scope) {
                     config.scope = scope;
+                }
+                if (redirectUri) {
+                    config.redirectUri = redirectUri;
                 }
             }
 

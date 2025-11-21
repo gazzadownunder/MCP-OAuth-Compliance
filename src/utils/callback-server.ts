@@ -11,12 +11,26 @@ export interface CallbackResult {
   error_description?: string;
 }
 
+export interface CallbackServerHandle {
+  waitForCallback: () => Promise<CallbackResult>;
+  close: () => void;
+}
+
 /**
  * Start a local HTTP server to handle OAuth callback
- * Returns a promise that resolves with the authorization code
+ * Returns a promise that resolves when server is listening, with a handle to wait for callback
  */
-export function startCallbackServer(port: number): Promise<CallbackResult> {
-  return new Promise((resolve, reject) => {
+export async function startCallbackServer(port: number): Promise<CallbackServerHandle> {
+  return new Promise((resolveStart, rejectStart) => {
+    let callbackResolve: (result: CallbackResult) => void;
+    let callbackReject: (error: Error) => void;
+    let timeoutId: NodeJS.Timeout;
+
+    const callbackPromise = new Promise<CallbackResult>((resolve, reject) => {
+      callbackResolve = resolve;
+      callbackReject = reject;
+    });
+
     const server = http.createServer((req, res) => {
       if (!req.url) {
         res.writeHead(400);
@@ -27,7 +41,8 @@ export function startCallbackServer(port: number): Promise<CallbackResult> {
       // Parse the callback URL
       const url = new URL(req.url, `http://localhost:${port}`);
 
-      if (url.pathname === '/callback') {
+      // Accept callback on both / and /callback paths
+      if (url.pathname === '/callback' || url.pathname === '/') {
         // Extract OAuth response parameters
         const code = url.searchParams.get('code');
         const state = url.searchParams.get('state');
@@ -51,7 +66,7 @@ export function startCallbackServer(port: number): Promise<CallbackResult> {
           `);
 
           // Return error to caller
-          resolve({ error, error_description: errorDescription || undefined });
+          callbackResolve({ error, error_description: errorDescription || undefined });
         } else if (code) {
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(`
@@ -67,7 +82,7 @@ export function startCallbackServer(port: number): Promise<CallbackResult> {
           `);
 
           // Return authorization code to caller
-          resolve({ code, state: state || undefined });
+          callbackResolve({ code, state: state || undefined });
         } else {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end(`
@@ -82,10 +97,11 @@ export function startCallbackServer(port: number): Promise<CallbackResult> {
             </html>
           `);
 
-          resolve({ error: 'invalid_response', error_description: 'No code or error in callback' });
+          callbackResolve({ error: 'invalid_response', error_description: 'No code or error in callback' });
         }
 
         // Close server after handling the callback
+        clearTimeout(timeoutId);
         server.close();
       } else {
         // Handle other paths
@@ -94,21 +110,34 @@ export function startCallbackServer(port: number): Promise<CallbackResult> {
       }
     });
 
+    // Handle server errors (e.g., port in use)
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        rejectStart(new Error(`Port ${port} is already in use. Please choose a different callback port or close the application using it.`));
+      } else {
+        rejectStart(err);
+      }
+    });
+
     // Start listening
     server.listen(port, () => {
       console.log(`\nCallback server listening on http://localhost:${port}/callback`);
-    });
 
-    // Handle server errors
-    server.on('error', (err) => {
-      reject(err);
-    });
+      // Timeout after 5 minutes
+      timeoutId = setTimeout(() => {
+        server.close();
+        callbackReject(new Error('OAuth callback timeout - no response received within 5 minutes'));
+      }, 5 * 60 * 1000);
 
-    // Timeout after 5 minutes
-    setTimeout(() => {
-      server.close();
-      reject(new Error('OAuth callback timeout - no response received within 5 minutes'));
-    }, 5 * 60 * 1000);
+      // Return handle to caller
+      resolveStart({
+        waitForCallback: () => callbackPromise,
+        close: () => {
+          clearTimeout(timeoutId);
+          server.close();
+        }
+      });
+    });
   });
 }
 
