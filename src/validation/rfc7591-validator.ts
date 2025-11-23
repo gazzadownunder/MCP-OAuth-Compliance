@@ -37,8 +37,20 @@ export class RFC7591Validator {
     if (response.redirect_uris) {
       for (const uri of response.redirect_uris) {
         if (!this.isValidRedirectUri(uri)) {
-          errors.push(`Invalid redirect_uri: ${uri} (must use https, localhost, or app-specific scheme)`);
+          errors.push(
+            `Invalid redirect_uri: ${uri} (must use https, localhost, or app-specific scheme)`
+          );
         }
+      }
+    }
+
+    // Validate that redirect-based grant types have redirect_uris
+    if (response.grant_types) {
+      const hasAuthCodeGrant = response.grant_types.includes('authorization_code');
+      const hasImplicitGrant = response.grant_types.includes('implicit');
+
+      if ((hasAuthCodeGrant || hasImplicitGrant) && !response.redirect_uris) {
+        errors.push('authorization_code grant type requires redirect_uris');
       }
     }
 
@@ -46,10 +58,6 @@ export class RFC7591Validator {
     if (response.grant_types && response.response_types) {
       const hasAuthCodeGrant = response.grant_types.includes('authorization_code');
       const hasCodeResponse = response.response_types.some(rt => rt.includes('code'));
-
-      if (hasAuthCodeGrant && !response.redirect_uris) {
-        errors.push('authorization_code grant type requires redirect_uris');
-      }
 
       if (hasCodeResponse && !hasAuthCodeGrant) {
         warnings.push('response_type includes code but authorization_code grant not specified');
@@ -102,9 +110,9 @@ export class RFC7591Validator {
     const warnings: string[] = [];
 
     // Check if redirect_uris is required
-    const requiresRedirectUris = metadata.grant_types?.some(
-      gt => gt === 'authorization_code' || gt === 'implicit'
-    ) || metadata.response_types?.some(rt => rt.includes('code') || rt.includes('token'));
+    const requiresRedirectUris =
+      metadata.grant_types?.some(gt => gt === 'authorization_code' || gt === 'implicit') ||
+      metadata.response_types?.some(rt => rt.includes('code') || rt.includes('token'));
 
     if (requiresRedirectUris && !metadata.redirect_uris) {
       errors.push('redirect_uris is required for redirect-based flows');
@@ -158,7 +166,10 @@ export class RFC7591Validator {
         return true;
       }
 
-      if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+      if (
+        url.protocol === 'http:' &&
+        (url.hostname === 'localhost' || url.hostname === '127.0.0.1')
+      ) {
         return true;
       }
 

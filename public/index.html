@@ -614,6 +614,20 @@
                     </div>
                 </div>
 
+                <!-- Enable Debug Mode -->
+                <div class="option-section" data-option="enableDebug">
+                    <div class="option-header">
+                        <label class="toggle-switch" onclick="event.stopPropagation()">
+                            <input type="checkbox" id="enableDebug" name="enableDebug">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="option-title">
+                            <h3>Enable Debug Mode</h3>
+                            <p>Capture and display request/response data for debugging</p>
+                        </div>
+                    </div>
+                </div>
+
                     </div><!-- End options-content -->
                 </div><!-- End options-container -->
 
@@ -704,6 +718,7 @@
             const skipOAuthFlow = document.getElementById('skipOAuth').checked;
             const interactiveAuth = document.getElementById('interactiveAuth').checked;
             const usePreConfiguredClient = document.getElementById('usePreConfiguredClient').checked;
+            const enableDebug = document.getElementById('enableDebug').checked;
             const callbackPort = document.getElementById('callbackPort').value;
             const resourceUri = document.getElementById('resourceUri').value;
 
@@ -713,6 +728,7 @@
                 skipOAuthFlow,
                 interactiveAuth,
                 usePreConfiguredClient,
+                enableDebug,
                 timeout: 30000
             };
 
@@ -892,6 +908,22 @@
                         </details>`;
                     }
 
+                    // Debug information
+                    if (result.debug) {
+                        if (result.debug.request) {
+                            html += `<details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; color: #8892f0;">Debug - Request Sent</summary>
+                                <div class="test-details">${JSON.stringify(result.debug.request, null, 2)}</div>
+                            </details>`;
+                        }
+                        if (result.debug.response) {
+                            html += `<details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; color: #8892f0;">Debug - Response Received</summary>
+                                <div class="test-details">${JSON.stringify(result.debug.response, null, 2)}</div>
+                            </details>`;
+                        }
+                    }
+
                     html += '</div>';
                     resultDiv.innerHTML = html;
                     categoryDiv.appendChild(resultDiv);
@@ -1000,6 +1032,22 @@
                             <summary style="cursor: pointer;">View Technical Details</summary>
                             <div class="test-details">${JSON.stringify(result.details, null, 2)}</div>
                         </details>`;
+                    }
+
+                    // Debug information
+                    if (result.debug) {
+                        if (result.debug.request) {
+                            html += `<details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; color: #8892f0;">Debug - Request Sent</summary>
+                                <div class="test-details">${JSON.stringify(result.debug.request, null, 2)}</div>
+                            </details>`;
+                        }
+                        if (result.debug.response) {
+                            html += `<details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; color: #8892f0;">Debug - Response Received</summary>
+                                <div class="test-details">${JSON.stringify(result.debug.response, null, 2)}</div>
+                            </details>`;
+                        }
                     }
 
                     html += '</div>';

@@ -7,7 +7,7 @@ import {
   ComplianceTestResult,
   ComplianceTestSuite,
   ComplianceCategory,
-  ServerTestConfig,
+  ServerTestConfig
 } from '../types/compliance.js';
 import { TEST_METADATA } from './test-metadata.js';
 import { generatePKCEParams } from '../utils/pkce.js';
@@ -23,7 +23,7 @@ export class MCPComplianceTester {
   constructor(config: ServerTestConfig) {
     this.config = {
       timeout: 30000,
-      ...config,
+      ...config
     };
   }
 
@@ -51,7 +51,7 @@ export class MCPComplianceTester {
       startTime,
       endTime,
       results: this.results,
-      summary: this.calculateSummary(),
+      summary: this.calculateSummary()
     };
   }
 
@@ -61,7 +61,7 @@ export class MCPComplianceTester {
       passed: this.results.filter(r => r.status === 'pass').length,
       failed: this.results.filter(r => r.status === 'fail').length,
       skipped: this.results.filter(r => r.status === 'skip').length,
-      pending: this.results.filter(r => r.status === 'pending').length,
+      pending: this.results.filter(r => r.status === 'pending').length
     };
   }
 
@@ -70,7 +70,7 @@ export class MCPComplianceTester {
     const metadata = TEST_METADATA[result.id];
     const enrichedResult: ComplianceTestResult = {
       ...result,
-      timestamp: new Date(),
+      timestamp: new Date()
     };
 
     if (metadata && result.status === 'fail') {
@@ -116,10 +116,11 @@ export class MCPComplianceTester {
 
     // Test 1.0: HTTPS transport required (except localhost)
     const serverUrl = new URL(this.config.serverUrl);
-    const isLocalhost = serverUrl.hostname === 'localhost' ||
-                       serverUrl.hostname === '127.0.0.1' ||
-                       serverUrl.hostname === '::1' ||
-                       serverUrl.hostname.endsWith('.local');
+    const isLocalhost =
+      serverUrl.hostname === 'localhost' ||
+      serverUrl.hostname === '127.0.0.1' ||
+      serverUrl.hostname === '::1' ||
+      serverUrl.hostname.endsWith('.local');
     const isHttps = serverUrl.protocol === 'https:';
 
     if (!isHttps && !isLocalhost) {
@@ -128,7 +129,8 @@ export class MCPComplianceTester {
         category,
         requirement: 'HTTPS transport required for production (REQUIRED)',
         status: 'fail',
-        message: 'Server is using HTTP protocol for a non-localhost URL - HTTPS is required in production',
+        message:
+          'Server is using HTTP protocol for a non-localhost URL - HTTPS is required in production',
         expected: 'https:// protocol for non-localhost URLs',
         actual: serverUrl.protocol,
         details: {
@@ -138,7 +140,8 @@ export class MCPComplianceTester {
         },
         rfcReference: 'RFC 6749 Section 3.1, RFC 8414 Section 2',
         rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
-        remediation: 'Use HTTPS for all production OAuth servers. HTTP is only acceptable for localhost/development.',
+        remediation:
+          'Use HTTPS for all production OAuth servers. HTTP is only acceptable for localhost/development.'
       });
     } else if (!isHttps && isLocalhost) {
       this.addResult({
@@ -155,7 +158,7 @@ export class MCPComplianceTester {
           hostname: serverUrl.hostname
         },
         rfcReference: 'RFC 6749 Section 3.1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1'
       });
     } else {
       this.addResult({
@@ -169,7 +172,7 @@ export class MCPComplianceTester {
           protocol: serverUrl.protocol
         },
         rfcReference: 'RFC 6749 Section 3.1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1'
       });
     }
 
@@ -185,18 +188,20 @@ export class MCPComplianceTester {
           capabilities: {},
           clientInfo: {
             name: 'MCP Compliance Tester',
-            version: '0.1.0',
-          },
-        },
+            version: '0.1.0'
+          }
+        }
       };
 
       const response = await this.fetchWithTimeout(this.config.serverUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(mcpRequest),
+        body: JSON.stringify(mcpRequest)
       });
+
+      const debugInfo = this.getLastDebugInfo();
 
       if (response.status === 401) {
         this.addResult({
@@ -207,6 +212,7 @@ export class MCPComplianceTester {
           details: { status: response.status },
           rfcReference: 'RFC 9728 Section 2',
           rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-2',
+          debug: debugInfo
         });
 
         // Test 1.2: WWW-Authenticate header present
@@ -217,7 +223,7 @@ export class MCPComplianceTester {
             category,
             requirement: 'WWW-Authenticate header present',
             status: 'pass',
-            details: { header: wwwAuth },
+            details: { header: wwwAuth }
           });
           this.cache.set('wwwAuth', wwwAuth);
 
@@ -230,7 +236,7 @@ export class MCPComplianceTester {
             status: hasResourceMetadata ? 'pass' : 'fail',
             message: hasResourceMetadata
               ? 'resource_metadata parameter found'
-              : 'resource_metadata parameter missing (will try fallback URIs)',
+              : 'resource_metadata parameter missing (will try fallback URIs)'
           });
 
           if (hasResourceMetadata) {
@@ -250,14 +256,15 @@ export class MCPComplianceTester {
             actual: 'No WWW-Authenticate header',
             rfcReference: 'RFC 9728 Section 2',
             rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-2',
-            remediation: 'Add WWW-Authenticate header to 401 response: WWW-Authenticate: Bearer resource_metadata="https://your-server/.well-known/oauth-protected-resource"',
+            remediation:
+              'Add WWW-Authenticate header to 401 response: WWW-Authenticate: Bearer resource_metadata="https://your-server/.well-known/oauth-protected-resource"'
           });
           this.addResult({
             id: 'prm-1.3',
             category,
             requirement: 'resource_metadata parameter in WWW-Authenticate',
             status: 'skip',
-            message: 'Skipped due to missing WWW-Authenticate header',
+            message: 'Skipped due to missing WWW-Authenticate header'
           });
         }
       } else {
@@ -272,7 +279,8 @@ export class MCPComplianceTester {
           details: { status: response.status },
           rfcReference: 'RFC 9728 Section 2',
           rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-2',
-          remediation: 'Configure your MCP server to return HTTP 401 when an unauthenticated request is made to a protected resource',
+          remediation:
+            'Configure your MCP server to return HTTP 401 when an unauthenticated request is made to a protected resource'
         });
         // Skip remaining tests if 401 not returned
         this.addResult({
@@ -280,14 +288,14 @@ export class MCPComplianceTester {
           category,
           requirement: 'WWW-Authenticate header present',
           status: 'skip',
-          message: 'Skipped due to missing 401 response',
+          message: 'Skipped due to missing 401 response'
         });
         this.addResult({
           id: 'prm-1.3',
           category,
           requirement: 'resource_metadata parameter in WWW-Authenticate',
           status: 'skip',
-          message: 'Skipped due to missing 401 response',
+          message: 'Skipped due to missing 401 response'
         });
       }
     } catch (error) {
@@ -296,7 +304,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'HTTP 401 response when unauthorized',
         status: 'fail',
-        message: `Request failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Request failed: ${error instanceof Error ? error.message : String(error)}`
       });
     }
 
@@ -319,6 +327,7 @@ export class MCPComplianceTester {
     if (prmUri) {
       try {
         const response = await this.fetchWithTimeout(prmUri);
+        const debugInfo = this.getLastDebugInfo();
         if (response.ok) {
           const data = await response.json();
           this.addResult({
@@ -332,6 +341,7 @@ export class MCPComplianceTester {
             rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-2.1',
             indentLevel: 1,
             groupLabel: 'MCP 4.2.1',
+            debug: debugInfo
           });
           if (!prmData) {
             prmData = data;
@@ -352,6 +362,7 @@ export class MCPComplianceTester {
             remediation: `The URI provided in resource_metadata parameter (${prmUri}) should return a valid PRM document.`,
             indentLevel: 1,
             groupLabel: 'MCP 4.2.1',
+            debug: debugInfo
           });
         }
       } catch (error) {
@@ -365,7 +376,7 @@ export class MCPComplianceTester {
           actual: 'Request failed',
           details: { uri: prmUri, error: String(error) },
           indentLevel: 1,
-          groupLabel: 'MCP 4.2.1',
+          groupLabel: 'MCP 4.2.1'
         });
       }
     } else {
@@ -376,7 +387,7 @@ export class MCPComplianceTester {
         status: 'skip',
         message: 'No resource_metadata URI provided in WWW-Authenticate header',
         indentLevel: 1,
-        groupLabel: 'MCP 4.2.1',
+        groupLabel: 'MCP 4.2.1'
       });
     }
 
@@ -389,6 +400,7 @@ export class MCPComplianceTester {
       const pathSpecificUri = `${baseUrl}/.well-known/oauth-protected-resource/${normalizedPath}`;
       try {
         const response = await this.fetchWithTimeout(pathSpecificUri);
+        const debugInfo = this.getLastDebugInfo();
         if (response.ok) {
           const data = await response.json();
           this.addResult({
@@ -399,9 +411,11 @@ export class MCPComplianceTester {
             message: 'PRM found at path-specific well-known URI',
             details: { uri: pathSpecificUri, data },
             rfcReference: 'MCP Draft 4.2.2',
-            rfcUrl: 'https://spec.modelcontextprotocol.io/specification/draft/basic/authentication/',
+            rfcUrl:
+              'https://spec.modelcontextprotocol.io/specification/draft/basic/authentication/',
             indentLevel: 2,
             groupLabel: 'MCP 4.2.2',
+            debug: debugInfo
           });
           if (!prmData) {
             prmData = data;
@@ -418,9 +432,11 @@ export class MCPComplianceTester {
             actual: `HTTP ${response.status}`,
             details: { uri: pathSpecificUri },
             rfcReference: 'MCP Draft 4.2.2',
-            rfcUrl: 'https://spec.modelcontextprotocol.io/specification/draft/basic/authentication/',
+            rfcUrl:
+              'https://spec.modelcontextprotocol.io/specification/draft/basic/authentication/',
             indentLevel: 2,
             groupLabel: 'MCP 4.2.2',
+            debug: debugInfo
           });
         }
       } catch (error) {
@@ -432,7 +448,7 @@ export class MCPComplianceTester {
           message: error instanceof Error ? error.message : String(error),
           details: { uri: pathSpecificUri },
           indentLevel: 2,
-          groupLabel: 'MCP 4.2.2',
+          groupLabel: 'MCP 4.2.2'
         });
       }
     } else {
@@ -443,7 +459,7 @@ export class MCPComplianceTester {
         status: 'skip',
         message: 'Server URL has no path component',
         indentLevel: 2,
-        groupLabel: 'MCP 4.2.2',
+        groupLabel: 'MCP 4.2.2'
       });
     }
 
@@ -454,6 +470,7 @@ export class MCPComplianceTester {
       const standardUri = `${baseUrl}/.well-known/oauth-protected-resource`;
       try {
         const response = await this.fetchWithTimeout(standardUri);
+        const debugInfo = this.getLastDebugInfo();
         if (response.ok) {
           const data = await response.json();
           this.addResult({
@@ -467,6 +484,7 @@ export class MCPComplianceTester {
             rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-3',
             indentLevel: 2,
             groupLabel: 'MCP 4.2.2',
+            debug: debugInfo
           });
           if (!prmData) {
             prmData = data;
@@ -487,6 +505,7 @@ export class MCPComplianceTester {
             remediation: `Host your Protected Resource Metadata at ${standardUri}. This is the standard location per RFC 9728.`,
             indentLevel: 2,
             groupLabel: 'MCP 4.2.2',
+            debug: debugInfo
           });
         }
       } catch (error) {
@@ -498,7 +517,7 @@ export class MCPComplianceTester {
           message: error instanceof Error ? error.message : String(error),
           details: { uri: standardUri },
           indentLevel: 2,
-          groupLabel: 'MCP 4.2.2',
+          groupLabel: 'MCP 4.2.2'
         });
       }
     }
@@ -510,8 +529,9 @@ export class MCPComplianceTester {
       const oauthAsUri = `${baseUrl}/.well-known/oauth-authorization-server`;
       try {
         const response = await this.fetchWithTimeout(oauthAsUri);
+        const debugInfo = this.getLastDebugInfo();
         if (response.ok) {
-          const data = await response.json() as Record<string, any>;
+          const data = (await response.json()) as Record<string, any>;
           // Check if this is AS metadata (has 'issuer' field) or PRM (has 'authorization_servers')
           const isASMetadata = 'issuer' in data && !('authorization_servers' in data);
           const isPRM = 'authorization_servers' in data;
@@ -529,6 +549,7 @@ export class MCPComplianceTester {
               rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-3',
               indentLevel: 2,
               groupLabel: 'MCP 4.2.2',
+              debug: debugInfo
             });
             if (!prmData) {
               prmData = data;
@@ -547,6 +568,7 @@ export class MCPComplianceTester {
               rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-3',
               indentLevel: 2,
               groupLabel: 'MCP 4.2.2',
+              debug: debugInfo
             });
             // Cache AS URL directly since we found AS metadata
             if ('issuer' in data) {
@@ -560,10 +582,12 @@ export class MCPComplianceTester {
               category,
               requirement: 'MCP 4.2.2 - Path C: OAuth AS well-known URI (fallback)',
               status: 'warning',
-              message: 'Found metadata but cannot determine type (missing both authorization_servers and issuer)',
+              message:
+                'Found metadata but cannot determine type (missing both authorization_servers and issuer)',
               details: { uri: oauthAsUri, data },
               indentLevel: 2,
               groupLabel: 'MCP 4.2.2',
+              debug: debugInfo
             });
           }
         } else {
@@ -577,6 +601,7 @@ export class MCPComplianceTester {
             details: { uri: oauthAsUri },
             indentLevel: 2,
             groupLabel: 'MCP 4.2.2',
+            debug: debugInfo
           });
         }
       } catch (error) {
@@ -588,7 +613,7 @@ export class MCPComplianceTester {
           message: error instanceof Error ? error.message : String(error),
           details: { uri: oauthAsUri },
           indentLevel: 2,
-          groupLabel: 'MCP 4.2.2',
+          groupLabel: 'MCP 4.2.2'
         });
       }
     }
@@ -608,7 +633,7 @@ export class MCPComplianceTester {
         : 'All fallback discovery paths failed',
       indentLevel: 1,
       rfcReference: 'MCP Draft 4.2.2',
-      rfcUrl: 'https://spec.modelcontextprotocol.io/specification/draft/basic/authentication/',
+      rfcUrl: 'https://spec.modelcontextprotocol.io/specification/draft/basic/authentication/'
     });
   }
 
@@ -631,7 +656,8 @@ export class MCPComplianceTester {
           details: { as_url: asUrl },
           rfcReference: 'RFC 9728 Section 3',
           rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-3',
-          remediation: 'The server should provide Protected Resource Metadata per RFC 9728 with an authorization_servers array. However, since the AS was discovered via the fallback method, DCR and OAuth flow tests can continue.',
+          remediation:
+            'The server should provide Protected Resource Metadata per RFC 9728 with an authorization_servers array. However, since the AS was discovered via the fallback method, DCR and OAuth flow tests can continue.'
         });
 
         // Skip scopes_supported test since we don't have PRM
@@ -640,7 +666,7 @@ export class MCPComplianceTester {
           category,
           requirement: 'PRM contains scopes_supported (RECOMMENDED)',
           status: 'skip',
-          message: 'No PRM available (AS discovered via fallback)',
+          message: 'No PRM available (AS discovered via fallback)'
         });
         return;
       }
@@ -656,20 +682,22 @@ export class MCPComplianceTester {
         actual: 'No PRM document found',
         rfcReference: 'RFC 9728 Section 3',
         rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-3',
-        remediation: 'Ensure PRM is accessible via at least one of the discovery methods: resource_metadata URI, path-specific well-known URI, or standard well-known URI.',
+        remediation:
+          'Ensure PRM is accessible via at least one of the discovery methods: resource_metadata URI, path-specific well-known URI, or standard well-known URI.'
       });
       this.addResult({
         id: 'prm-1.9',
         category,
         requirement: 'PRM contains scopes_supported (RECOMMENDED)',
         status: 'skip',
-        message: 'No PRM data available',
+        message: 'No PRM data available'
       });
       return;
     }
 
     // Test 1.8: authorization_servers present
-    const hasAuthServers = Array.isArray(prmData.authorization_servers) && prmData.authorization_servers.length > 0;
+    const hasAuthServers =
+      Array.isArray(prmData.authorization_servers) && prmData.authorization_servers.length > 0;
     this.addResult({
       id: 'prm-1.8',
       category,
@@ -681,7 +709,8 @@ export class MCPComplianceTester {
       details: { authorization_servers: prmData.authorization_servers },
       rfcReference: 'RFC 9728 Section 3',
       rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-3',
-      remediation: 'Add an "authorization_servers" array to your PRM containing the issuer identifier(s) of your authorization server(s).\n\nExample:\n{\n  "resource": "https://your-server/mcp",\n  "authorization_servers": ["https://your-auth-server"],\n  "scopes_supported": ["read", "write"]\n}',
+      remediation:
+        'Add an "authorization_servers" array to your PRM containing the issuer identifier(s) of your authorization server(s).\n\nExample:\n{\n  "resource": "https://your-server/mcp",\n  "authorization_servers": ["https://your-auth-server"],\n  "scopes_supported": ["read", "write"]\n}'
     });
 
     if (hasAuthServers) {
@@ -695,10 +724,12 @@ export class MCPComplianceTester {
       category,
       requirement: 'PRM contains scopes_supported (RECOMMENDED)',
       status: hasScopes ? 'pass' : 'skip',
-      message: hasScopes ? 'scopes_supported present' : 'scopes_supported missing (RECOMMENDED but not required)',
+      message: hasScopes
+        ? 'scopes_supported present'
+        : 'scopes_supported missing (RECOMMENDED but not required)',
       details: { scopes_supported: prmData.scopes_supported },
       rfcReference: 'RFC 9728 Section 3',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-3',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9728.html#section-3'
     });
   }
 
@@ -716,17 +747,18 @@ export class MCPComplianceTester {
         category,
         requirement: 'AS metadata endpoint accessible',
         status: 'skip',
-        message: 'No authorization server URL available from PRM',
+        message: 'No authorization server URL available from PRM'
       });
       return;
     }
 
     // Test 2.0a: HTTPS transport required for AS (except localhost)
     const asUrlObj = new URL(asUrl);
-    const isLocalhost = asUrlObj.hostname === 'localhost' ||
-                       asUrlObj.hostname === '127.0.0.1' ||
-                       asUrlObj.hostname === '::1' ||
-                       asUrlObj.hostname.endsWith('.local');
+    const isLocalhost =
+      asUrlObj.hostname === 'localhost' ||
+      asUrlObj.hostname === '127.0.0.1' ||
+      asUrlObj.hostname === '::1' ||
+      asUrlObj.hostname.endsWith('.local');
     const isHttps = asUrlObj.protocol === 'https:';
 
     if (!isHttps && !isLocalhost) {
@@ -735,7 +767,8 @@ export class MCPComplianceTester {
         category,
         requirement: 'HTTPS transport required for AS in production (REQUIRED)',
         status: 'fail',
-        message: 'Authorization server is using HTTP protocol for a non-localhost URL - HTTPS is required in production',
+        message:
+          'Authorization server is using HTTP protocol for a non-localhost URL - HTTPS is required in production',
         expected: 'https:// protocol for non-localhost URLs',
         actual: asUrlObj.protocol,
         details: {
@@ -745,7 +778,8 @@ export class MCPComplianceTester {
         },
         rfcReference: 'RFC 6749 Section 3.1, RFC 8414 Section 2',
         rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
-        remediation: 'Use HTTPS for all production OAuth authorization servers. HTTP is only acceptable for localhost/development.',
+        remediation:
+          'Use HTTPS for all production OAuth authorization servers. HTTP is only acceptable for localhost/development.'
       });
     } else if (!isHttps && isLocalhost) {
       this.addResult({
@@ -753,7 +787,8 @@ export class MCPComplianceTester {
         category,
         requirement: 'HTTPS transport required for AS in production (REQUIRED)',
         status: 'warning',
-        message: 'Authorization server is using HTTP on localhost - acceptable for development only',
+        message:
+          'Authorization server is using HTTP on localhost - acceptable for development only',
         expected: 'https:// protocol (http:// acceptable for localhost)',
         actual: asUrlObj.protocol,
         details: {
@@ -762,7 +797,7 @@ export class MCPComplianceTester {
           hostname: asUrlObj.hostname
         },
         rfcReference: 'RFC 6749 Section 3.1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1'
       });
     } else {
       this.addResult({
@@ -776,7 +811,7 @@ export class MCPComplianceTester {
           protocol: asUrlObj.protocol
         },
         rfcReference: 'RFC 6749 Section 3.1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1'
       });
     }
 
@@ -787,13 +822,15 @@ export class MCPComplianceTester {
         category,
         requirement: 'AS URL should not have trailing slash',
         status: 'warning',
-        message: 'Authorization server URL ends with trailing slash/backslash - this violates RFC 8414 and may cause issues with non-compliant clients',
+        message:
+          'Authorization server URL ends with trailing slash/backslash - this violates RFC 8414 and may cause issues with non-compliant clients',
         expected: 'AS URL without trailing slash (per RFC 8414 Section 3)',
         actual: asUrl,
         details: { asUrl },
         rfcReference: 'RFC 8414 Section 3',
         rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-3',
-        remediation: 'Remove the trailing slash from the authorization server URL in the PRM document. RFC 8414 requires that "any terminating \'/\' MUST be removed" before constructing the well-known URI.',
+        remediation:
+          'Remove the trailing slash from the authorization server URL in the PRM document. RFC 8414 requires that "any terminating \'/\' MUST be removed" before constructing the well-known URI.'
       });
     }
 
@@ -871,14 +908,25 @@ export class MCPComplianceTester {
           requirement: 'AS metadata endpoint accessible',
           status: 'pass',
           details: { url: metadataUrl },
+          debug: this.getLastDebugInfo()
         });
 
         // Test endpoints per RFC 8414
         const endpoints = [
-          { id: 'as-2.2', field: 'registration_endpoint', name: 'registration_endpoint', required: false },
-          { id: 'as-2.3', field: 'authorization_endpoint', name: 'authorization_endpoint', required: true },
+          {
+            id: 'as-2.2',
+            field: 'registration_endpoint',
+            name: 'registration_endpoint',
+            required: false
+          },
+          {
+            id: 'as-2.3',
+            field: 'authorization_endpoint',
+            name: 'authorization_endpoint',
+            required: true
+          },
           { id: 'as-2.4', field: 'token_endpoint', name: 'token_endpoint', required: true },
-          { id: 'as-2.5', field: 'scopes_supported', name: 'scopes_supported', required: false },
+          { id: 'as-2.5', field: 'scopes_supported', name: 'scopes_supported', required: false }
         ];
 
         for (const { id, field, name, required } of endpoints) {
@@ -887,19 +935,20 @@ export class MCPComplianceTester {
             id,
             category,
             requirement: `AS metadata contains ${name}${required ? ' (REQUIRED)' : ' (OPTIONAL/RECOMMENDED)'}`,
-            status: present ? 'pass' : (required ? 'fail' : 'skip'),
+            status: present ? 'pass' : required ? 'fail' : 'skip',
             message: present ? undefined : `${name} missing from AS metadata`,
-            details: { [field]: metadata[field] },
+            details: { [field]: metadata[field] }
           });
 
           // Check HTTPS for endpoint URLs (except scopes_supported which is not a URL)
           if (present && field !== 'scopes_supported' && typeof metadata[field] === 'string') {
             try {
               const endpointUrl = new URL(metadata[field]);
-              const isEndpointLocalhost = endpointUrl.hostname === 'localhost' ||
-                                         endpointUrl.hostname === '127.0.0.1' ||
-                                         endpointUrl.hostname === '::1' ||
-                                         endpointUrl.hostname.endsWith('.local');
+              const isEndpointLocalhost =
+                endpointUrl.hostname === 'localhost' ||
+                endpointUrl.hostname === '127.0.0.1' ||
+                endpointUrl.hostname === '::1' ||
+                endpointUrl.hostname.endsWith('.local');
               const isEndpointHttps = endpointUrl.protocol === 'https:';
 
               if (!isEndpointHttps && !isEndpointLocalhost) {
@@ -917,7 +966,7 @@ export class MCPComplianceTester {
                     hostname: endpointUrl.hostname
                   },
                   rfcReference: 'RFC 6749 Section 3.1',
-                  rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
+                  rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1'
                 });
               } else if (!isEndpointHttps && isEndpointLocalhost) {
                 this.addResult({
@@ -931,7 +980,7 @@ export class MCPComplianceTester {
                     protocol: endpointUrl.protocol
                   },
                   rfcReference: 'RFC 6749 Section 3.1',
-                  rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1',
+                  rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-3.1'
                 });
               }
             } catch (e) {
@@ -972,19 +1021,24 @@ export class MCPComplianceTester {
           },
           rfcReference: 'RFC 8414 Section 3',
           rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-3',
-          remediation: `Ensure AS metadata is available at one of these locations. RFC 8414 requires it at ${rfc8414Uri} (well-known URI inserted between host and path).`,
+          remediation: `Ensure AS metadata is available at one of these locations. RFC 8414 requires it at ${rfc8414Uri} (well-known URI inserted between host and path).`
         });
 
         // Skip remaining AS tests
         ['as-2.2', 'as-2.3', 'as-2.4', 'as-2.5'].forEach((testId, index) => {
-          const fields = ['registration_endpoint', 'authorization_endpoint', 'token_endpoint', 'scopes_supported'];
+          const fields = [
+            'registration_endpoint',
+            'authorization_endpoint',
+            'token_endpoint',
+            'scopes_supported'
+          ];
           const required = [false, true, true, false];
           this.addResult({
             id: testId,
             category,
             requirement: `AS metadata contains ${fields[index]}${required[index] ? ' (REQUIRED)' : ' (OPTIONAL/RECOMMENDED)'}`,
             status: 'skip',
-            message: 'Skipped due to AS metadata discovery failure',
+            message: 'Skipped due to AS metadata discovery failure'
           });
         });
       }
@@ -1000,19 +1054,24 @@ export class MCPComplianceTester {
         details: {
           asUrl,
           error: error instanceof Error ? error.message : String(error)
-        },
+        }
       });
 
       // Skip remaining AS tests
       ['as-2.2', 'as-2.3', 'as-2.4', 'as-2.5'].forEach((testId, index) => {
-        const fields = ['registration_endpoint', 'authorization_endpoint', 'token_endpoint', 'scopes_supported'];
+        const fields = [
+          'registration_endpoint',
+          'authorization_endpoint',
+          'token_endpoint',
+          'scopes_supported'
+        ];
         const required = [false, true, true, false];
         this.addResult({
           id: testId,
           category,
           requirement: `AS metadata contains ${fields[index]}${required[index] ? ' (REQUIRED)' : ' (OPTIONAL/RECOMMENDED)'}`,
           status: 'skip',
-          message: 'Skipped due to AS metadata discovery failure',
+          message: 'Skipped due to AS metadata discovery failure'
         });
       });
     }
@@ -1034,7 +1093,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'DCR tests',
         status: 'skip',
-        message: 'Using pre-configured client_id - DCR not required',
+        message: 'Using pre-configured client_id - DCR not required'
       });
       return;
     }
@@ -1045,7 +1104,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'Registration endpoint accepts POST',
         status: 'skip',
-        message: 'No registration endpoint available from AS metadata',
+        message: 'No registration endpoint available from AS metadata'
       });
       return;
     }
@@ -1058,7 +1117,7 @@ export class MCPComplianceTester {
         redirect_uris: [`http://localhost:${callbackPort}/callback`],
         grant_types: ['authorization_code'],
         response_types: ['code'],
-        token_endpoint_auth_method: 'none',
+        token_endpoint_auth_method: 'none'
       };
 
       // Only include scope if configured (some servers reject scope in DCR)
@@ -1069,8 +1128,10 @@ export class MCPComplianceTester {
       const response = await this.fetchWithTimeout(registrationEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clientMetadata),
+        body: JSON.stringify(clientMetadata)
       });
+
+      const debugInfo = this.getLastDebugInfo();
 
       // Test 3.1: Endpoint accepts POST
       this.addResult({
@@ -1080,6 +1141,7 @@ export class MCPComplianceTester {
         status: response.status !== 405 ? 'pass' : 'fail',
         message: response.status === 405 ? 'POST method not allowed' : undefined,
         details: { status: response.status },
+        debug: debugInfo
       });
 
       // Test 3.2: Returns 201 on success (RFC 7591 requirement)
@@ -1089,8 +1151,9 @@ export class MCPComplianceTester {
           category,
           requirement: 'Returns HTTP 201 on successful registration (REQUIRED)',
           status: response.status === 201 ? 'pass' : 'fail',
-          message: response.status !== 201 ? `RFC 7591 requires 201, got ${response.status}` : undefined,
-          details: { status: response.status },
+          message:
+            response.status !== 201 ? `RFC 7591 requires 201, got ${response.status}` : undefined,
+          details: { status: response.status }
         });
 
         const registrationResponse = await response.json();
@@ -1117,14 +1180,14 @@ export class MCPComplianceTester {
             status: response.status,
             requestBody: clientMetadata,
             errorResponse: errorBody
-          },
+          }
         });
 
         // Fallback Test 3.2a: Try with refresh_token grant type
         // Some servers (like FastMCP) incorrectly require refresh_token despite RFC 7591 not mandating it
         const fallbackMetadata = {
           ...clientMetadata,
-          grant_types: ['authorization_code', 'refresh_token'],
+          grant_types: ['authorization_code', 'refresh_token']
         };
 
         let fallbackResponse: Response | null = null;
@@ -1132,7 +1195,7 @@ export class MCPComplianceTester {
           fallbackResponse = await this.fetchWithTimeout(registrationEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(fallbackMetadata),
+            body: JSON.stringify(fallbackMetadata)
           });
 
           if (fallbackResponse.ok) {
@@ -1142,7 +1205,8 @@ export class MCPComplianceTester {
               category,
               requirement: 'Accepts registration with refresh_token grant (FALLBACK)',
               status: 'warning',
-              message: 'Registration succeeded when refresh_token was added to grant_types. This indicates server has stricter requirements than RFC 7591.',
+              message:
+                'Registration succeeded when refresh_token was added to grant_types. This indicates server has stricter requirements than RFC 7591.',
               expected: 'Server should accept authorization_code alone per RFC 7591',
               actual: 'Server requires refresh_token in grant_types',
               details: {
@@ -1151,8 +1215,9 @@ export class MCPComplianceTester {
               },
               rfcReference: 'RFC 7591 Section 2',
               rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7591.html#section-2',
-              remediation: 'RFC 7591 does not require refresh_token grant type for registration. Your server should accept clients registering with only authorization_code. Consider relaxing this validation or document this as a server-specific requirement.',
-              indentLevel: 1,
+              remediation:
+                'RFC 7591 does not require refresh_token grant type for registration. Your server should accept clients registering with only authorization_code. Consider relaxing this validation or document this as a server-specific requirement.',
+              indentLevel: 1
             });
 
             // Process the successful fallback registration
@@ -1173,7 +1238,7 @@ export class MCPComplianceTester {
                 status: fallbackResponse.status,
                 requestBody: fallbackMetadata
               },
-              indentLevel: 1,
+              indentLevel: 1
             });
 
             // Skip remaining tests
@@ -1188,7 +1253,7 @@ export class MCPComplianceTester {
                 category,
                 requirement: requirements[index],
                 status: 'skip',
-                message: 'Skipped due to registration failure',
+                message: 'Skipped due to registration failure'
               });
             });
           }
@@ -1199,7 +1264,7 @@ export class MCPComplianceTester {
             requirement: 'Accepts registration with refresh_token grant (FALLBACK)',
             status: 'fail',
             message: `Fallback test failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
-            indentLevel: 1,
+            indentLevel: 1
           });
 
           // Skip remaining tests
@@ -1214,7 +1279,7 @@ export class MCPComplianceTester {
               category,
               requirement: requirements[index],
               status: 'skip',
-              message: 'Skipped due to registration failure',
+              message: 'Skipped due to registration failure'
             });
           });
         }
@@ -1225,13 +1290,16 @@ export class MCPComplianceTester {
         category,
         requirement: 'Registration endpoint accepts POST',
         status: 'fail',
-        message: error instanceof Error ? error.message : String(error),
+        message: error instanceof Error ? error.message : String(error)
       });
     }
   }
 
   // Helper method to test registration response fields
-  private async testRegistrationResponseFields(category: ComplianceCategory, registrationResponse: any) {
+  private async testRegistrationResponseFields(
+    category: ComplianceCategory,
+    registrationResponse: any
+  ) {
     // Test 3.3: Response contains client_id (REQUIRED per RFC 7591)
     const hasClientId = 'client_id' in registrationResponse;
     this.addResult({
@@ -1240,7 +1308,7 @@ export class MCPComplianceTester {
       requirement: 'Registration response contains client_id (REQUIRED)',
       status: hasClientId ? 'pass' : 'fail',
       message: hasClientId ? undefined : 'client_id REQUIRED by RFC 7591 but missing from response',
-      details: { client_id: registrationResponse.client_id },
+      details: { client_id: registrationResponse.client_id }
     });
 
     // Test 3.4: Validates client_secret_expires_at if client_secret issued
@@ -1251,11 +1319,13 @@ export class MCPComplianceTester {
         category,
         requirement: 'client_secret_expires_at present when client_secret issued (REQUIRED)',
         status: hasExpiresAt ? 'pass' : 'fail',
-        message: hasExpiresAt ? undefined : 'client_secret_expires_at REQUIRED when client_secret is issued',
+        message: hasExpiresAt
+          ? undefined
+          : 'client_secret_expires_at REQUIRED when client_secret is issued',
         details: {
           client_secret_present: true,
           client_secret_expires_at: registrationResponse.client_secret_expires_at
-        },
+        }
       });
     } else {
       this.addResult({
@@ -1263,7 +1333,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'client_secret_expires_at present when client_secret issued (REQUIRED)',
         status: 'skip',
-        message: 'No client_secret issued (expected for public clients with PKCE)',
+        message: 'No client_secret issued (expected for public clients with PKCE)'
       });
     }
 
@@ -1274,8 +1344,10 @@ export class MCPComplianceTester {
       category,
       requirement: 'Supports PKCE (token_endpoint_auth_method: none)',
       status: supportsPKCE ? 'pass' : 'skip',
-      message: supportsPKCE ? undefined : `Got token_endpoint_auth_method: ${registrationResponse.token_endpoint_auth_method} (PKCE uses 'none')`,
-      details: { token_endpoint_auth_method: registrationResponse.token_endpoint_auth_method },
+      message: supportsPKCE
+        ? undefined
+        : `Got token_endpoint_auth_method: ${registrationResponse.token_endpoint_auth_method} (PKCE uses 'none')`,
+      details: { token_endpoint_auth_method: registrationResponse.token_endpoint_auth_method }
     });
   }
 
@@ -1293,7 +1365,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'Supports authorization_code grant type',
         status: 'skip',
-        message: 'No AS metadata available',
+        message: 'No AS metadata available'
       });
       return;
     }
@@ -1310,23 +1382,32 @@ export class MCPComplianceTester {
       requirement: 'Supports authorization_code grant type',
       status: supportsAuthCode ? 'pass' : 'fail',
       message: supportsAuthCode
-        ? (grantTypes ? 'authorization_code in grant_types_supported' : 'grant_types_supported not specified (default includes authorization_code)')
+        ? grantTypes
+          ? 'authorization_code in grant_types_supported'
+          : 'grant_types_supported not specified (default includes authorization_code)'
         : 'authorization_code not in grant_types_supported',
-      details: { grant_types_supported: grantTypes || 'not specified (defaults to authorization_code and implicit)' },
+      details: {
+        grant_types_supported:
+          grantTypes || 'not specified (defaults to authorization_code and implicit)'
+      }
     });
 
     // Test 4.2: PKCE support (code_challenge_methods_supported)
-    const codeChallengeMethods = asMetadata.code_challenge_methods_supported as string[] | undefined;
+    const codeChallengeMethods = asMetadata.code_challenge_methods_supported as
+      | string[]
+      | undefined;
     const supportsPKCE = codeChallengeMethods?.includes('S256');
     this.addResult({
       id: 'oauth-4.2',
       category,
       requirement: 'Supports PKCE with S256 (code_challenge_methods_supported)',
-      status: supportsPKCE ? 'pass' : (codeChallengeMethods ? 'fail' : 'skip'),
+      status: supportsPKCE ? 'pass' : codeChallengeMethods ? 'fail' : 'skip',
       message: supportsPKCE
         ? 'S256 in code_challenge_methods_supported'
-        : (codeChallengeMethods ? 'S256 not in code_challenge_methods_supported' : 'code_challenge_methods_supported not advertised'),
-      details: { code_challenge_methods_supported: codeChallengeMethods || 'not specified' },
+        : codeChallengeMethods
+          ? 'S256 not in code_challenge_methods_supported'
+          : 'code_challenge_methods_supported not advertised',
+      details: { code_challenge_methods_supported: codeChallengeMethods || 'not specified' }
     });
 
     // If interactive testing enabled, execute the full OAuth flow
@@ -1339,7 +1420,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'Supports resource parameter (RFC 8707)',
         status: 'skip',
-        message: 'Requires full OAuth flow execution - enable interactiveAuth to test',
+        message: 'Requires full OAuth flow execution - enable interactiveAuth to test'
       });
 
       this.addResult({
@@ -1347,7 +1428,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'Token endpoint validates PKCE',
         status: 'skip',
-        message: 'Requires full OAuth flow execution - enable interactiveAuth to test',
+        message: 'Requires full OAuth flow execution - enable interactiveAuth to test'
       });
 
       this.addResult({
@@ -1355,7 +1436,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'Issues Bearer access tokens',
         status: 'skip',
-        message: 'Requires full OAuth flow execution - enable interactiveAuth to test',
+        message: 'Requires full OAuth flow execution - enable interactiveAuth to test'
       });
 
       this.addResult({
@@ -1363,20 +1444,24 @@ export class MCPComplianceTester {
         category,
         requirement: 'Token response includes required fields',
         status: 'skip',
-        message: 'Requires full OAuth flow execution - enable interactiveAuth to test',
+        message: 'Requires full OAuth flow execution - enable interactiveAuth to test'
       });
     }
   }
-
 
   /**
    * Execute the full OAuth 2.1 + PKCE authorization code flow
    * This requires user interaction via browser
    */
-  private async executeOAuthFlow(category: ComplianceCategory, asMetadata: Record<string, unknown>) {
+  private async executeOAuthFlow(
+    category: ComplianceCategory,
+    asMetadata: Record<string, unknown>
+  ) {
     const authorizationEndpoint = asMetadata.authorization_endpoint as string | undefined;
     const tokenEndpoint = asMetadata.token_endpoint as string | undefined;
-    const clientRegistration = this.cache.get('clientRegistration') as Record<string, unknown> | undefined;
+    const clientRegistration = this.cache.get('clientRegistration') as
+      | Record<string, unknown>
+      | undefined;
 
     if (!authorizationEndpoint || !tokenEndpoint) {
       this.addResult({
@@ -1384,7 +1469,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'Supports resource parameter (RFC 8707)',
         status: 'skip',
-        message: 'Missing authorization or token endpoint in AS metadata',
+        message: 'Missing authorization or token endpoint in AS metadata'
       });
       return;
     }
@@ -1406,14 +1491,15 @@ export class MCPComplianceTester {
     } else if (clientRegistration && clientRegistration.client_id) {
       clientId = clientRegistration.client_id as string;
       // clientSecret available at clientRegistration.client_secret if needed
-      redirectUri = (clientRegistration.redirect_uris as string[])?.[0] || 'http://localhost:3000/callback';
+      redirectUri =
+        (clientRegistration.redirect_uris as string[])?.[0] || 'http://localhost:3000/callback';
     } else {
       this.addResult({
         id: 'oauth-4.3',
         category,
         requirement: 'Supports resource parameter (RFC 8707)',
         status: 'skip',
-        message: 'No client available - either DCR must succeed or provide pre-configured client_id',
+        message: 'No client available - either DCR must succeed or provide pre-configured client_id'
       });
       return;
     }
@@ -1423,7 +1509,8 @@ export class MCPComplianceTester {
     if (this.config.redirectUri) {
       try {
         const redirectUrl = new URL(this.config.redirectUri);
-        callbackPort = parseInt(redirectUrl.port, 10) || (redirectUrl.protocol === 'https:' ? 443 : 80);
+        callbackPort =
+          parseInt(redirectUrl.port, 10) || (redirectUrl.protocol === 'https:' ? 443 : 80);
       } catch {
         // Invalid URL, use default port
       }
@@ -1436,10 +1523,20 @@ export class MCPComplianceTester {
     console.log('\n🔐 Starting interactive OAuth flow...');
     console.log('You will be redirected to your browser to authenticate.');
 
-    // Start callback server first - this will fail fast if port is in use
+    // Start callback server first - this will fail fast if all ports are in use
+    // Pass serverUrl so callback server can avoid using the same port as the server under test
     let callbackServer: Awaited<ReturnType<typeof startCallbackServer>> | undefined;
+    let actualPort: number;
     try {
-      callbackServer = await startCallbackServer(callbackPort);
+      callbackServer = await startCallbackServer(callbackPort, this.config.serverUrl);
+      actualPort = callbackServer.actualPort;
+
+      // Update redirectUri if port changed
+      if (actualPort !== callbackPort) {
+        const originalUri = new URL(redirectUri);
+        redirectUri = `${originalUri.protocol}//${originalUri.hostname}:${actualPort}${originalUri.pathname}`;
+        console.log(`📝 Updated redirect URI to: ${redirectUri}`);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.addResult({
@@ -1448,7 +1545,7 @@ export class MCPComplianceTester {
         requirement: 'OAuth callback server can start',
         status: 'fail',
         message: `Failed to start callback server: ${errorMessage}`,
-        details: { port: callbackPort, error: errorMessage },
+        details: { requestedPort: callbackPort, error: errorMessage }
       });
       return;
     }
@@ -1483,14 +1580,14 @@ export class MCPComplianceTester {
       const authUrlString = authUrl.toString();
       if (process.platform === 'win32') {
         // Windows: use start command with proper escaping
-        exec(`start "" "${authUrlString}"`, (error) => {
+        exec(`start "" "${authUrlString}"`, error => {
           if (error) {
             console.error('Failed to open browser:', error.message);
           }
         });
       } else {
         const openCommand = process.platform === 'darwin' ? 'open' : 'xdg-open';
-        exec(`${openCommand} "${authUrlString}"`, (error) => {
+        exec(`${openCommand} "${authUrlString}"`, error => {
           if (error) {
             console.error('Failed to open browser:', error.message);
           }
@@ -1507,7 +1604,7 @@ export class MCPComplianceTester {
           requirement: 'Authorization endpoint accepts requests',
           status: 'fail',
           message: `Authorization failed: ${callback.error}`,
-          details: callback as unknown as Record<string, unknown>,
+          details: callback as unknown as Record<string, unknown>
         });
         return;
       }
@@ -1519,7 +1616,7 @@ export class MCPComplianceTester {
           requirement: 'Authorization endpoint returns authorization code',
           status: 'fail',
           message: 'No authorization code received',
-          details: callback as unknown as Record<string, unknown>,
+          details: callback as unknown as Record<string, unknown>
         });
         return;
       }
@@ -1536,7 +1633,7 @@ export class MCPComplianceTester {
         actual: callback.state,
         details: { expected: pkce.state, received: callback.state },
         rfcReference: 'RFC 6749 Section 10.12',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-10.12',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-10.12'
       });
 
       console.log('✅ Authorization code received');
@@ -1548,16 +1645,15 @@ export class MCPComplianceTester {
         clientId,
         redirectUri,
         codeVerifier: pkce.codeVerifier,
-        resourceUri: this.config.resourceUri,
+        resourceUri: this.config.resourceUri
       });
-
     } catch (error) {
       this.addResult({
         id: 'oauth-4.3',
         category,
         requirement: 'OAuth flow execution',
         status: 'fail',
-        message: `OAuth flow failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: `OAuth flow failed: ${error instanceof Error ? error.message : String(error)}`
       });
     } finally {
       // Ensure callback server is closed
@@ -1586,7 +1682,7 @@ export class MCPComplianceTester {
       code: params.code,
       client_id: params.clientId,
       redirect_uri: params.redirectUri,
-      code_verifier: params.codeVerifier,
+      code_verifier: params.codeVerifier
     });
 
     // Add resource parameter if specified (RFC 8707)
@@ -1598,10 +1694,12 @@ export class MCPComplianceTester {
       const response = await this.fetchWithTimeout(tokenEndpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: body.toString(),
+        body: body.toString()
       });
+
+      const debugInfo = this.getLastDebugInfo();
 
       // Test 4.4: Token endpoint accepts request
       this.addResult({
@@ -1611,6 +1709,7 @@ export class MCPComplianceTester {
         status: response.ok ? 'pass' : 'fail',
         message: response.ok ? undefined : `Token endpoint returned HTTP ${response.status}`,
         details: { status: response.status },
+        debug: debugInfo
       });
 
       if (!response.ok) {
@@ -1621,12 +1720,12 @@ export class MCPComplianceTester {
           requirement: 'Token endpoint validates PKCE code_verifier',
           status: 'fail',
           message: `Token request failed with HTTP ${response.status}`,
-          details: { status: response.status, error: errorBody },
+          details: { status: response.status, error: errorBody }
         });
         return;
       }
 
-      const tokenResponse = await response.json() as Record<string, any>;
+      const tokenResponse = (await response.json()) as Record<string, any>;
       this.cache.set('tokenResponse', tokenResponse);
 
       // Test 4.5: Access token issued
@@ -1639,7 +1738,7 @@ export class MCPComplianceTester {
         message: hasAccessToken ? undefined : 'access_token missing from token response',
         details: { has_access_token: hasAccessToken },
         rfcReference: 'RFC 6749 Section 5.1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1'
       });
 
       // Test 4.6: Token type is Bearer
@@ -1655,7 +1754,7 @@ export class MCPComplianceTester {
         actual: tokenType,
         details: { token_type: tokenType },
         rfcReference: 'RFC 6750 Section 1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6750.html#section-1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6750.html#section-1'
       });
 
       // Test 4.7: expires_in present
@@ -1665,10 +1764,12 @@ export class MCPComplianceTester {
         category,
         requirement: 'Token response includes expires_in (RECOMMENDED)',
         status: hasExpiresIn ? 'pass' : 'skip',
-        message: hasExpiresIn ? `Token expires in ${tokenResponse.expires_in} seconds` : 'expires_in not present (RECOMMENDED but not required)',
+        message: hasExpiresIn
+          ? `Token expires in ${tokenResponse.expires_in} seconds`
+          : 'expires_in not present (RECOMMENDED but not required)',
         details: { expires_in: tokenResponse.expires_in },
         rfcReference: 'RFC 6749 Section 5.1',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1'
       });
 
       // Test 4.8: Refresh token issued (for authorization_code + refresh_token)
@@ -1679,7 +1780,7 @@ export class MCPComplianceTester {
         requirement: 'Issues refresh_token (OPTIONAL)',
         status: hasRefreshToken ? 'pass' : 'skip',
         message: hasRefreshToken ? 'refresh_token issued' : 'refresh_token not issued (OPTIONAL)',
-        details: { has_refresh_token: hasRefreshToken },
+        details: { has_refresh_token: hasRefreshToken }
       });
 
       // Test 4.9: Resource parameter support (RFC 8707)
@@ -1691,14 +1792,16 @@ export class MCPComplianceTester {
           category,
           requirement: 'Supports resource parameter audience restriction (RFC 8707)',
           status: hasAudience ? 'pass' : 'skip',
-          message: hasAudience ? 'Token includes audience restriction' : 'Cannot verify audience restriction without decoding token',
+          message: hasAudience
+            ? 'Token includes audience restriction'
+            : 'Cannot verify audience restriction without decoding token',
           details: {
             resource_requested: params.resourceUri,
             aud: tokenResponse.aud,
-            audience: tokenResponse.audience,
+            audience: tokenResponse.audience
           },
           rfcReference: 'RFC 8707',
-          rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8707.html',
+          rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8707.html'
         });
       }
 
@@ -1708,14 +1811,13 @@ export class MCPComplianceTester {
       if (hasAccessToken) {
         await this.testJWTValidation();
       }
-
     } catch (error) {
       this.addResult({
         id: 'oauth-4.4',
         category,
         requirement: 'Token endpoint exchange',
         status: 'fail',
-        message: `Token exchange failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Token exchange failed: ${error instanceof Error ? error.message : String(error)}`
       });
     }
   }
@@ -1738,7 +1840,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'JWT access token available for validation',
         status: 'skip',
-        message: 'No access token available - OAuth flow must complete first',
+        message: 'No access token available - OAuth flow must complete first'
       });
       return;
     }
@@ -1754,8 +1856,10 @@ export class MCPComplianceTester {
       category,
       requirement: 'Access token is a JWT (three Base64URL-encoded parts)',
       status: isJWT ? 'pass' : 'warning',
-      message: isJWT ? 'Access token is a valid JWT format' : 'Access token is not a JWT (may be opaque token)',
-      details: { parts: parts.length, isJWT },
+      message: isJWT
+        ? 'Access token is a valid JWT format'
+        : 'Access token is not a JWT (may be opaque token)',
+      details: { parts: parts.length, isJWT }
     });
 
     if (!isJWT) {
@@ -1764,7 +1868,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'JWT header validation',
         status: 'skip',
-        message: 'Token is not a JWT - cannot validate structure',
+        message: 'Token is not a JWT - cannot validate structure'
       });
       return;
     }
@@ -1782,7 +1886,7 @@ export class MCPComplianceTester {
         category,
         requirement: 'JWT is properly Base64URL-encoded',
         status: 'fail',
-        message: `Failed to decode JWT: ${e instanceof Error ? e.message : String(e)}`,
+        message: `Failed to decode JWT: ${e instanceof Error ? e.message : String(e)}`
       });
       return;
     }
@@ -1793,7 +1897,7 @@ export class MCPComplianceTester {
       requirement: 'JWT is properly Base64URL-encoded',
       status: 'pass',
       message: 'JWT header and payload successfully decoded',
-      details: { header, payload_claims: Object.keys(payload) },
+      details: { header, payload_claims: Object.keys(payload) }
     });
 
     // Test 5.3: Header has required fields
@@ -1810,7 +1914,7 @@ export class MCPComplianceTester {
       actual: header.alg,
       details: { alg: header.alg, typ: header.typ },
       rfcReference: 'RFC 7515 Section 4.1.1',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-4.1.1',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-4.1.1'
     });
 
     // Test 5.4: Check for kid (key ID) in header (OPTIONAL but recommended)
@@ -1820,10 +1924,12 @@ export class MCPComplianceTester {
       category,
       requirement: 'JWT header contains "kid" claim for key identification (OPTIONAL)',
       status: hasKid ? 'pass' : 'skip',
-      message: hasKid ? `Key ID: ${header.kid}` : 'No "kid" claim (OPTIONAL) - key selection may be ambiguous',
+      message: hasKid
+        ? `Key ID: ${header.kid}`
+        : 'No "kid" claim (OPTIONAL) - key selection may be ambiguous',
       details: { kid: header.kid },
       rfcReference: 'RFC 7515 Section 4.1.4',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-4.1.4',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-4.1.4'
     });
 
     // Test 5.5: Required claims present (iss, sub, aud, exp, iat)
@@ -1835,17 +1941,18 @@ export class MCPComplianceTester {
       category,
       requirement: 'JWT contains required claims (iss, sub, exp, iat)',
       status: missingClaims.length === 0 ? 'pass' : 'fail',
-      message: missingClaims.length === 0
-        ? 'All required claims present'
-        : `Missing required claims: ${missingClaims.join(', ')}`,
+      message:
+        missingClaims.length === 0
+          ? 'All required claims present'
+          : `Missing required claims: ${missingClaims.join(', ')}`,
       expected: 'iss, sub, exp, iat',
       actual: Object.keys(payload).join(', '),
       details: {
         present: requiredClaims.filter(c => c in payload),
-        missing: missingClaims,
+        missing: missingClaims
       },
       rfcReference: 'RFC 9068 Section 2.2',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2'
     });
 
     // Test 5.6: Validate issuer matches AS metadata
@@ -1857,15 +1964,17 @@ export class MCPComplianceTester {
       id: 'jwt-5.6',
       category,
       requirement: 'JWT issuer (iss) matches authorization server',
-      status: issuerMatches ? 'pass' : (expectedIssuer ? 'fail' : 'warning'),
+      status: issuerMatches ? 'pass' : expectedIssuer ? 'fail' : 'warning',
       message: issuerMatches
         ? 'Issuer matches authorization server metadata'
-        : (expectedIssuer ? 'Issuer mismatch' : 'Cannot verify issuer - no AS metadata available'),
+        : expectedIssuer
+          ? 'Issuer mismatch'
+          : 'Cannot verify issuer - no AS metadata available',
       expected: expectedIssuer,
       actual: tokenIssuer,
       details: { expected_issuer: expectedIssuer, token_issuer: tokenIssuer },
       rfcReference: 'RFC 9068 Section 2.2',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2'
     });
 
     // Test 5.7: Token not expired
@@ -1878,13 +1987,16 @@ export class MCPComplianceTester {
       id: 'jwt-5.7',
       category,
       requirement: 'JWT is not expired (exp claim)',
-      status: exp === undefined ? 'fail' : (isExpired ? 'fail' : 'pass'),
-      message: exp === undefined
-        ? 'No expiration claim (exp) in token'
-        : (isExpired ? `Token expired ${Math.abs(expiresIn!)} seconds ago` : `Token valid for ${expiresIn} seconds`),
+      status: exp === undefined ? 'fail' : isExpired ? 'fail' : 'pass',
+      message:
+        exp === undefined
+          ? 'No expiration claim (exp) in token'
+          : isExpired
+            ? `Token expired ${Math.abs(expiresIn!)} seconds ago`
+            : `Token valid for ${expiresIn} seconds`,
       details: { exp, now, expires_in_seconds: expiresIn },
       rfcReference: 'RFC 7519 Section 4.1.4',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7519.html#section-4.1.4',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7519.html#section-4.1.4'
     });
 
     // Test 5.8: Token not used before issued (iat)
@@ -1895,13 +2007,16 @@ export class MCPComplianceTester {
       id: 'jwt-5.8',
       category,
       requirement: 'JWT issued-at (iat) is not in the future',
-      status: iat === undefined ? 'warning' : (iatValid ? 'pass' : 'fail'),
-      message: iat === undefined
-        ? 'No issued-at claim (iat) in token'
-        : (iatValid ? 'Token issued-at is valid' : 'Token appears to be issued in the future'),
+      status: iat === undefined ? 'warning' : iatValid ? 'pass' : 'fail',
+      message:
+        iat === undefined
+          ? 'No issued-at claim (iat) in token'
+          : iatValid
+            ? 'Token issued-at is valid'
+            : 'Token appears to be issued in the future',
       details: { iat, now, issued_seconds_ago: iat ? now - iat : undefined },
       rfcReference: 'RFC 7519 Section 4.1.6',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7519.html#section-4.1.6',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7519.html#section-4.1.6'
     });
 
     // Test 5.9: JWKS endpoint available and reachable (OPTIONAL per RFC 8414)
@@ -1921,7 +2036,7 @@ export class MCPComplianceTester {
         // Host-only + well-known (e.g., http://host:8080/.well-known/jwks.json)
         { uri: `${baseUrl}/.well-known/jwks.json`, source: 'well-known-host-only' },
         // Keycloak convention with full path (e.g., http://host:8080/realms/name/protocol/openid-connect/certs)
-        { uri: `${issuer}/protocol/openid-connect/certs`, source: 'keycloak-convention' },
+        { uri: `${issuer}/protocol/openid-connect/certs`, source: 'keycloak-convention' }
       ];
 
       for (const { uri, source } of jwksUrisToTry) {
@@ -1944,28 +2059,31 @@ export class MCPComplianceTester {
         category,
         requirement: 'JWKS URI available in AS metadata (OPTIONAL)',
         status: 'warning',
-        message: 'No jwks_uri in authorization server metadata and no fallback JWKS endpoint found - signature verification not possible',
+        message:
+          'No jwks_uri in authorization server metadata and no fallback JWKS endpoint found - signature verification not possible',
         rfcReference: 'RFC 8414 Section 2',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-2',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc8414.html#section-2'
       });
       this.addResult({
         id: 'jwt-5.14',
         category,
         requirement: 'JWT signature is cryptographically valid',
         status: 'skip',
-        message: 'Cannot verify signature - no JWKS URI available',
+        message: 'Cannot verify signature - no JWKS URI available'
       });
     } else {
       // Try to fetch JWKS
       try {
         const jwksResponse = await this.fetchWithTimeout(jwksUri);
+        const jwksDebugInfo = this.getLastDebugInfo();
 
         // Report how JWKS was discovered
-        const sourceMessage = jwksSource === 'metadata'
-          ? 'JWKS URI from AS metadata'
-          : jwksSource === 'well-known-fallback'
-            ? 'JWKS URI discovered via /.well-known/jwks.json fallback'
-            : 'JWKS URI discovered via Keycloak convention (/protocol/openid-connect/certs)';
+        const sourceMessage =
+          jwksSource === 'metadata'
+            ? 'JWKS URI from AS metadata'
+            : jwksSource === 'well-known-fallback'
+              ? 'JWKS URI discovered via /.well-known/jwks.json fallback'
+              : 'JWKS URI discovered via Keycloak convention (/protocol/openid-connect/certs)';
 
         this.addResult({
           id: 'jwt-5.9',
@@ -1978,6 +2096,7 @@ export class MCPComplianceTester {
           details: { jwks_uri: jwksUri, status: jwksResponse.status, source: jwksSource },
           rfcReference: 'RFC 7517',
           rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7517.html',
+          debug: jwksDebugInfo
         });
 
         if (!jwksResponse.ok) {
@@ -1986,12 +2105,12 @@ export class MCPComplianceTester {
             category,
             requirement: 'JWT signature is cryptographically valid',
             status: 'skip',
-            message: `Cannot verify signature - JWKS endpoint returned HTTP ${jwksResponse.status}`,
+            message: `Cannot verify signature - JWKS endpoint returned HTTP ${jwksResponse.status}`
           });
         }
 
         if (jwksResponse.ok) {
-          const jwks = await jwksResponse.json() as { keys?: Array<Record<string, any>> };
+          const jwks = (await jwksResponse.json()) as { keys?: Array<Record<string, any>> };
 
           // Test 5.10: JWKS contains keys
           const hasKeys = Array.isArray(jwks.keys) && jwks.keys.length > 0;
@@ -2000,13 +2119,11 @@ export class MCPComplianceTester {
             category,
             requirement: 'JWKS contains signing keys',
             status: hasKeys ? 'pass' : 'fail',
-            message: hasKeys
-              ? `JWKS contains ${jwks.keys!.length} key(s)`
-              : 'JWKS has no keys',
+            message: hasKeys ? `JWKS contains ${jwks.keys!.length} key(s)` : 'JWKS has no keys',
             details: {
               key_count: jwks.keys?.length || 0,
-              key_ids: jwks.keys?.map(k => k.kid).filter(Boolean),
-            },
+              key_ids: jwks.keys?.map(k => k.kid).filter(Boolean)
+            }
           });
 
           if (!hasKeys) {
@@ -2015,7 +2132,7 @@ export class MCPComplianceTester {
               category,
               requirement: 'JWT signature is cryptographically valid',
               status: 'skip',
-              message: 'Cannot verify signature - JWKS has no keys',
+              message: 'Cannot verify signature - JWKS has no keys'
             });
           }
 
@@ -2036,8 +2153,8 @@ export class MCPComplianceTester {
                 token_kid: header.kid,
                 available_kids: jwks.keys!.map(k => k.kid).filter(Boolean),
                 matching_key_alg: matchingKey?.alg,
-                matching_key_use: matchingKey?.use,
-              },
+                matching_key_use: matchingKey?.use
+              }
             });
 
             if (!matchingKey) {
@@ -2046,7 +2163,7 @@ export class MCPComplianceTester {
                 category,
                 requirement: 'JWT signature is cryptographically valid',
                 status: 'skip',
-                message: `Cannot verify signature - no key found matching kid "${header.kid}"`,
+                message: `Cannot verify signature - no key found matching kid "${header.kid}"`
               });
             }
 
@@ -2063,7 +2180,7 @@ export class MCPComplianceTester {
                   : `Algorithm mismatch: token uses ${header.alg}, key specifies ${matchingKey.alg}`,
                 expected: header.alg,
                 actual: matchingKey.alg || '(not specified)',
-                details: { token_alg: header.alg, key_alg: matchingKey.alg },
+                details: { token_alg: header.alg, key_alg: matchingKey.alg }
               });
 
               // Test 5.14: Cryptographic signature verification
@@ -2075,8 +2192,9 @@ export class MCPComplianceTester {
               category,
               requirement: 'JWKS contains key matching token "kid"',
               status: 'skip',
-              message: 'Token has no "kid" claim (OPTIONAL) - will attempt verification with available keys',
-              details: { available_kids: jwks.keys!.map(k => k.kid).filter(Boolean) },
+              message:
+                'Token has no "kid" claim (OPTIONAL) - will attempt verification with available keys',
+              details: { available_kids: jwks.keys!.map(k => k.kid).filter(Boolean) }
             });
 
             // Still attempt signature verification - jose will try available keys
@@ -2090,14 +2208,14 @@ export class MCPComplianceTester {
           requirement: 'JWKS URI is reachable',
           status: 'fail',
           message: `Failed to fetch JWKS: ${error instanceof Error ? error.message : String(error)}`,
-          details: { jwks_uri: jwksUri },
+          details: { jwks_uri: jwksUri }
         });
         this.addResult({
           id: 'jwt-5.14',
           category,
           requirement: 'JWT signature is cryptographically valid',
           status: 'skip',
-          message: 'Cannot verify signature - failed to fetch JWKS',
+          message: 'Cannot verify signature - failed to fetch JWKS'
         });
       }
     }
@@ -2114,7 +2232,7 @@ export class MCPComplianceTester {
         : 'No audience claim (OPTIONAL) - token may be usable at any resource server',
       details: { aud },
       rfcReference: 'RFC 9068 Section 2.2',
-      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2',
+      rfcUrl: 'https://www.rfc-editor.org/rfc/rfc9068.html#section-2.2'
     });
 
     // Final: Include decoded access token for reference
@@ -2134,8 +2252,8 @@ export class MCPComplianceTester {
       message: 'Full decoded JWT access token for reference',
       details: {
         header: formatClaims(header),
-        payload: formatClaims(payload),
-      },
+        payload: formatClaims(payload)
+      }
     });
 
     console.log('✅ JWT validation tests completed\n');
@@ -2170,12 +2288,11 @@ export class MCPComplianceTester {
         details: {
           algorithm: protectedHeader.alg,
           kid: protectedHeader.kid,
-          verified_claims: Object.keys(payload),
+          verified_claims: Object.keys(payload)
         },
         rfcReference: 'RFC 7515 Section 5.2',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-5.2',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-5.2'
       });
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -2201,10 +2318,10 @@ export class MCPComplianceTester {
           error: errorMessage,
           algorithm: header.alg,
           kid: header.kid,
-          jwks_uri: jwksUri,
+          jwks_uri: jwksUri
         },
         rfcReference: 'RFC 7515 Section 5.2',
-        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-5.2',
+        rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7515.html#section-5.2'
       });
     }
   }
@@ -2217,14 +2334,96 @@ export class MCPComplianceTester {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeout);
 
+    // Capture debug info if enabled
+    let debugInfo: ComplianceTestResult['debug'] | undefined;
+    if (this.config.enableDebug) {
+      const headers: Record<string, string> = {};
+      if (options?.headers) {
+        if (options.headers instanceof Headers) {
+          options.headers.forEach((value, key) => {
+            headers[key] = value;
+          });
+        } else if (Array.isArray(options.headers)) {
+          options.headers.forEach(([key, value]) => {
+            headers[key] = value;
+          });
+        } else {
+          Object.assign(headers, options.headers);
+        }
+      }
+
+      debugInfo = {
+        request: {
+          url,
+          method: options?.method || 'GET',
+          headers,
+          body: options?.body ? this.parseDebugBody(options.body) : undefined
+        }
+      };
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
-        signal: controller.signal,
+        signal: controller.signal
       });
+
+      // Capture response debug info if enabled
+      if (this.config.enableDebug && debugInfo) {
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+
+        // Clone response to read body without consuming it
+        const responseClone = response.clone();
+        let responseBody: unknown;
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType?.includes('application/json')) {
+            responseBody = await responseClone.json();
+          } else {
+            responseBody = await responseClone.text();
+          }
+        } catch {
+          responseBody = '[Unable to parse response body]';
+        }
+
+        debugInfo.response = {
+          status: response.status,
+          statusText: response.statusText,
+          headers: responseHeaders,
+          body: responseBody
+        };
+
+        // Store the most recent debug info in cache
+        this.cache.set('lastDebugInfo', debugInfo);
+      }
+
       return response;
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private getLastDebugInfo(): ComplianceTestResult['debug'] | undefined {
+    if (!this.config.enableDebug) {
+      return undefined;
+    }
+    const debug = this.cache.get('lastDebugInfo') as ComplianceTestResult['debug'] | undefined;
+    // Clear after retrieving
+    this.cache.delete('lastDebugInfo');
+    return debug;
+  }
+
+  private parseDebugBody(body: RequestInit['body']): unknown {
+    if (typeof body === 'string') {
+      try {
+        return JSON.parse(body);
+      } catch {
+        return body;
+      }
+    }
+    return '[Binary or FormData body]';
   }
 }

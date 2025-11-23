@@ -145,7 +145,7 @@ When enabled, additional fields appear:
 **AS Metadata Discovery Methods** (tries in order):
 1. Direct URL (if AS URL itself returns metadata)
 2. RFC 8414 standard: `{origin}/.well-known/oauth-authorization-server{path}`
-3. Keycloak-style: `{issuer}/.well-known/oauth-authorization-server`
+3. OIDC approach: `{issuer}/.well-known/oauth-authorization-server`
 
 ### 3. Dynamic Client Registration (RFC 7591)
 
@@ -380,7 +380,7 @@ If you see "Port X is already in use" error:
 The tester tries three discovery methods:
 1. Direct URL (if AS URL returns metadata directly)
 2. RFC 8414 standard: well-known inserted between host and path
-3. Keycloak-style: well-known appended to issuer path
+3. OIDC approach: well-known appended to issuer path
 
 Check server logs to see which URL was requested.
 
@@ -437,7 +437,7 @@ For full compliance (no warnings):
 - Prevents `invalid_scope` errors from scope mismatches
 
 ### AS Metadata Discovery
-- Added Keycloak-style discovery method
+- Added OIDC discovery method
 - Tries: direct URL → RFC 8414 standard → appended to path
 
 ### Callback Port
@@ -462,7 +462,7 @@ For full compliance (no warnings):
 - If `jwks_uri` not in AS metadata, tries fallback endpoints:
   1. `{issuer}/.well-known/jwks.json`
   2. `{host}/.well-known/jwks.json`
-  3. `{issuer}/protocol/openid-connect/certs` (Keycloak convention)
+  3. `{issuer}/protocol/openid-connect/certs` (OIDC convention)
 
 ### Redirect URI Configuration
 - New `redirectUri` option for pre-configured clients

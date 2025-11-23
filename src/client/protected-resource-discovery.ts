@@ -29,7 +29,10 @@ export class ProtectedResourceDiscoveryClient {
         return metadata;
       }
     } catch (error) {
-      console.warn('WWW-Authenticate discovery failed:', error instanceof Error ? error.message : String(error));
+      console.warn(
+        'WWW-Authenticate discovery failed:',
+        error instanceof Error ? error.message : String(error)
+      );
     }
 
     // Step 2: Try well-known URI method
@@ -83,7 +86,7 @@ export class ProtectedResourceDiscoveryClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream'
+        Accept: 'application/json, text/event-stream'
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -123,7 +126,7 @@ export class ProtectedResourceDiscoveryClient {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json'
+        Accept: 'application/json'
       }
     });
 
@@ -142,7 +145,10 @@ export class ProtectedResourceDiscoveryClient {
     const validatedMetadata = ProtectedResourceMetadataSchema.parse(metadata);
 
     // Ensure authorization_servers is present
-    if (!validatedMetadata.authorization_servers || validatedMetadata.authorization_servers.length === 0) {
+    if (
+      !validatedMetadata.authorization_servers ||
+      validatedMetadata.authorization_servers.length === 0
+    ) {
       throw new Error('Protected resource metadata missing authorization_servers field');
     }
 

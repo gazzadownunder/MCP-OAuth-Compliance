@@ -2,6 +2,8 @@
 
 Web-based tool for testing MCP server OAuth compliance with RFC 9728, RFC 8414, RFC 7591, RFC 9068, RFC 7519, RFC 7515, and OAuth 2.1.
 
+**GitHub Repository**: https://github.com/gazzadownunder/MCP-OAuth-Compliance
+
 ## Quick Start
 
 ```bash
@@ -55,9 +57,11 @@ PORT=4000 mcp-oauth-compliance
 - **Web Interface**: Interactive compliance testing dashboard
 - **Comprehensive Tests**: RFC 9728 (Protected Resource Metadata), RFC 8414 (AS Discovery), RFC 7591 (DCR), OAuth 2.1
 - **HTTPS Validation**: Transport security checks per OAuth requirements
-- **Multiple Discovery Methods**: Standard RFC 8414 + Keycloak-style discovery
+- **Multiple Discovery Methods**: Standard RFC 8414 + OIDC discovery
 - **Pre-configured Client Mode**: Test with existing OAuth clients (bypasses DCR)
 - **Interactive OAuth Flow**: Browser-based authorization with PKCE
+- **Smart Port Selection**: Automatically avoids the server's port and finds available callback port (up to 20 attempts)
+- **Debug Mode**: Capture and display HTTP request/response data for troubleshooting
 
 ## Configuration Options
 
@@ -67,11 +71,12 @@ PORT=4000 mcp-oauth-compliance
 | **Skip OAuth Flow** | Skip token acquisition tests |
 | **Interactive Auth** | Enable browser-based OAuth flow |
 | **Pre-configured Client** | Use existing client credentials instead of DCR |
-| **Callback Port** | Port for OAuth callback (default: 3000) |
+| **Callback Port** | Port for OAuth callback (default: 3000). Automatically finds next available port, skipping the server's port |
 | **Redirect URI** | Full redirect URI registered with your IDP |
 | **Resource URI** | Resource indicator for RFC 8707 |
 | **Client ID/Secret** | Pre-configured client credentials |
 | **Scope** | OAuth scopes to request |
+| **Enable Debug** | Capture and display HTTP request/response data for all server interactions |
 
 ## Test Categories
 
@@ -83,7 +88,7 @@ PORT=4000 mcp-oauth-compliance
 
 ### 2. Authorization Server Discovery (RFC 8414)
 - HTTPS transport validation
-- Standard and Keycloak-style discovery
+- Standard and OIDC discovery
 - Required endpoint validation
 - PKCE support detection
 
@@ -105,8 +110,8 @@ PORT=4000 mcp-oauth-compliance
 
 ## Documentation
 
-- [COMPLIANCE-TESTER.md](COMPLIANCE-TESTER.md) - Detailed test documentation
-- [CLAUDE.md](CLAUDE.md) - Development guide
+- [COMPLIANCE-TESTER.md](https://github.com/gazzadownunder/MCP-OAuth-Compliance/blob/master/COMPLIANCE-TESTER.md) - Detailed test documentation
+- [CLAUDE.md](https://github.com/gazzadownunder/MCP-OAuth-Compliance/blob/master/CLAUDE.md) - Development guide
 
 ## Development
 
@@ -119,8 +124,8 @@ npm run type-check   # Type validation
 
 ## Project Structure
 
-- `src/compliance/` - Compliance tester implementation
-- `src/client/` - DCR client library
-- `src/validation/` - RFC 7591 validators
-- `src/types/` - TypeScript definitions
-- `public/` - Web interface
+- [`src/compliance/`](https://github.com/gazzadownunder/MCP-OAuth-Compliance/tree/master/src/compliance) - Compliance tester implementation
+- [`src/client/`](https://github.com/gazzadownunder/MCP-OAuth-Compliance/tree/master/src/client) - DCR client library
+- [`src/validation/`](https://github.com/gazzadownunder/MCP-OAuth-Compliance/tree/master/src/validation) - RFC 7591 validators
+- [`src/types/`](https://github.com/gazzadownunder/MCP-OAuth-Compliance/tree/master/src/types) - TypeScript definitions
+- [`public/`](https://github.com/gazzadownunder/MCP-OAuth-Compliance/tree/master/public) - Web interface

@@ -19,8 +19,76 @@ export interface CallbackServerHandle {
 /**
  * Start a local HTTP server to handle OAuth callback
  * Returns a promise that resolves when server is listening, with a handle to wait for callback
+ * If the requested port is in use, will automatically try ports +1, +2, +3, etc. up to 10 attempts
+ *
+ * @param port - The desired callback port
+ * @param serverUrl - The URL of the server under test (to avoid port conflicts)
  */
-export async function startCallbackServer(port: number): Promise<CallbackServerHandle> {
+export async function startCallbackServer(
+  port: number,
+  serverUrl?: string
+): Promise<CallbackServerHandle & { actualPort: number }> {
+  // Extract port from server URL if provided
+  let serverPort: number | undefined;
+  if (serverUrl) {
+    try {
+      const url = new URL(serverUrl);
+      if (url.port) {
+        serverPort = parseInt(url.port);
+      } else {
+        // Default ports for HTTP/HTTPS
+        serverPort = url.protocol === 'https:' ? 443 : 80;
+      }
+    } catch {
+      // Invalid URL, ignore
+    }
+  }
+
+  // Try up to 20 ports starting from the requested port (increased from 10 to account for skipped ports)
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const tryPort = port + attempt;
+
+    // Skip if this is the server's port
+    if (serverPort && tryPort === serverPort) {
+      console.log(`⏭️  Skipping port ${tryPort} (server under test is using this port)`);
+      continue;
+    }
+
+    try {
+      const handle = await tryPort_Internal(tryPort);
+      if (attempt > 0) {
+        console.log(`⚠️  Port ${port} was in use, using port ${tryPort} instead`);
+      }
+      return { ...handle, actualPort: tryPort };
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      // If it's not EADDRINUSE, throw immediately
+      if (error.code !== 'EADDRINUSE') {
+        throw err;
+      }
+      // If this was the last attempt, throw
+      if (attempt === 19) {
+        const endPort = port + 19;
+        const portRange = serverPort
+          ? `${port}-${endPort} (excluding server port ${serverPort})`
+          : `${port}-${endPort}`;
+        throw new Error(
+          `All attempted ports (${portRange}) are in use. Please close applications using these ports or specify a different callback port.`
+        );
+      }
+      // Otherwise, try next port
+      continue;
+    }
+  }
+
+  // This should never be reached
+  throw new Error(`Failed to start callback server on any port from ${port} to ${port + 19}`);
+}
+
+/**
+ * Internal function to try starting server on a specific port
+ */
+function tryPort_Internal(port: number): Promise<CallbackServerHandle> {
   return new Promise((resolveStart, rejectStart) => {
     let callbackResolve: (result: CallbackResult) => void;
     let callbackReject: (error: Error) => void;
@@ -97,7 +165,10 @@ export async function startCallbackServer(port: number): Promise<CallbackServerH
             </html>
           `);
 
-          callbackResolve({ error: 'invalid_response', error_description: 'No code or error in callback' });
+          callbackResolve({
+            error: 'invalid_response',
+            error_description: 'No code or error in callback'
+          });
         }
 
         // Close server after handling the callback
@@ -113,7 +184,11 @@ export async function startCallbackServer(port: number): Promise<CallbackServerH
     // Handle server errors (e.g., port in use)
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        rejectStart(new Error(`Port ${port} is already in use. Please choose a different callback port or close the application using it.`));
+        rejectStart(
+          new Error(
+            `Port ${port} is already in use. Please choose a different callback port or close the application using it.`
+          )
+        );
       } else {
         rejectStart(err);
       }
@@ -124,10 +199,15 @@ export async function startCallbackServer(port: number): Promise<CallbackServerH
       console.log(`\nCallback server listening on http://localhost:${port}/callback`);
 
       // Timeout after 5 minutes
-      timeoutId = setTimeout(() => {
-        server.close();
-        callbackReject(new Error('OAuth callback timeout - no response received within 5 minutes'));
-      }, 5 * 60 * 1000);
+      timeoutId = setTimeout(
+        () => {
+          server.close();
+          callbackReject(
+            new Error('OAuth callback timeout - no response received within 5 minutes')
+          );
+        },
+        5 * 60 * 1000
+      );
 
       // Return handle to caller
       resolveStart({

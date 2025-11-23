@@ -9,24 +9,30 @@ export const ClientMetadataSchema = z.object({
   redirect_uris: z.array(z.string().url()).optional(),
 
   // Client authentication
-  token_endpoint_auth_method: z.enum([
-    'none',
-    'client_secret_post',
-    'client_secret_basic',
-    'client_secret_jwt',
-    'private_key_jwt'
-  ]).optional(),
+  token_endpoint_auth_method: z
+    .enum([
+      'none',
+      'client_secret_post',
+      'client_secret_basic',
+      'client_secret_jwt',
+      'private_key_jwt'
+    ])
+    .optional(),
 
   // Grant types
-  grant_types: z.array(z.enum([
-    'authorization_code',
-    'implicit',
-    'password',
-    'client_credentials',
-    'refresh_token',
-    'urn:ietf:params:oauth:grant-type:jwt-bearer',
-    'urn:ietf:params:oauth:grant-type:saml2-bearer'
-  ])).optional(),
+  grant_types: z
+    .array(
+      z.enum([
+        'authorization_code',
+        'implicit',
+        'password',
+        'client_credentials',
+        'refresh_token',
+        'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        'urn:ietf:params:oauth:grant-type:saml2-bearer'
+      ])
+    )
+    .optional(),
 
   // Response types
   response_types: z.array(z.string()).optional(),

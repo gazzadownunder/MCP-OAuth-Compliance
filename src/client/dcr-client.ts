@@ -43,12 +43,15 @@ export class DCRClient {
 
     // Only create MCP client for stdio transport
     if (config.transportType === 'stdio') {
-      this.client = new Client({
-        name: 'dcr-test-client',
-        version: '0.1.0'
-      }, {
-        capabilities: {}
-      });
+      this.client = new Client(
+        {
+          name: 'dcr-test-client',
+          version: '0.1.0'
+        },
+        {
+          capabilities: {}
+        }
+      );
     }
   }
 
@@ -96,7 +99,9 @@ export class DCRClient {
           this.discoveredTokenEndpoint = endpoints.token;
         }
       } catch (error) {
-        console.warn(`OAuth Discovery failed: ${error instanceof Error ? error.message : String(error)}`);
+        console.warn(
+          `OAuth Discovery failed: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
 
@@ -133,7 +138,9 @@ export class DCRClient {
       return this.discoveredRegistrationEndpoint;
     }
 
-    throw new Error('No registration endpoint discovered. Ensure the MCP server provides OAuth 2.0 Protected Resource Metadata (RFC 9728).');
+    throw new Error(
+      'No registration endpoint discovered. Ensure the MCP server provides OAuth 2.0 Protected Resource Metadata (RFC 9728).'
+    );
   }
 
   /**
@@ -204,9 +211,9 @@ export class DCRClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
           ...(this.config.initialAccessToken && {
-            'Authorization': `Bearer ${this.config.initialAccessToken}`
+            Authorization: `Bearer ${this.config.initialAccessToken}`
           })
         },
         body: JSON.stringify(request)
@@ -244,12 +251,15 @@ export class DCRClient {
    * This is a direct HTTP GET to the registration client URI,
    * NOT an MCP tool call.
    */
-  async readClient(registrationClientUri: string, accessToken: string): Promise<RegistrationResponse> {
+  async readClient(
+    registrationClientUri: string,
+    accessToken: string
+  ): Promise<RegistrationResponse> {
     const response = await fetch(registrationClientUri, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json'
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
       }
     });
 
@@ -276,9 +286,9 @@ export class DCRClient {
     const response = await fetch(registrationClientUri, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        Accept: 'application/json'
       },
       body: JSON.stringify(metadata)
     });
@@ -302,7 +312,7 @@ export class DCRClient {
     const response = await fetch(registrationClientUri, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${accessToken}`
+        Authorization: `Bearer ${accessToken}`
       }
     });
 
@@ -311,11 +321,15 @@ export class DCRClient {
     }
   }
 
-
   /**
    * Get server info
    */
-  async getServerInfo(): Promise<{ name: string; version: string; url?: string; authorizationServer?: string }> {
+  async getServerInfo(): Promise<{
+    name: string;
+    version: string;
+    url?: string;
+    authorizationServer?: string;
+  }> {
     if (this.config.transportType === 'stdio') {
       if (!this.client) {
         throw new Error('MCP Client not initialized');
