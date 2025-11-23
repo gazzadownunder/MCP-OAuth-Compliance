@@ -7,3 +7,4 @@ coverage/
 .vscode/
 *.tsbuildinfo
 config.json
+.claude/
