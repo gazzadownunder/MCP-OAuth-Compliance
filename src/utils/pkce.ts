@@ -27,11 +27,7 @@ export function generateCodeChallenge(verifier: string): string {
  * Base64-URL-encode a buffer (RFC 7636 Appendix A)
  */
 function base64URLEncode(buffer: Buffer): string {
-  return buffer
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+  return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 /**

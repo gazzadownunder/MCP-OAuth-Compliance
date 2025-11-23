@@ -20,6 +20,20 @@ export interface ComplianceTestResult {
   remediation?: string;
   indentLevel?: number; // 0 = no indent, 1 = first level, 2 = second level, etc.
   groupLabel?: string; // Optional label for grouped tests (e.g., "MCP 4.2.1", "MCP 4.2.2")
+  debug?: {
+    request?: {
+      url?: string;
+      method?: string;
+      headers?: Record<string, string>;
+      body?: unknown;
+    };
+    response?: {
+      status?: number;
+      statusText?: string;
+      headers?: Record<string, string>;
+      body?: unknown;
+    };
+  };
 }
 
 export interface ComplianceTestSuite {
@@ -42,7 +56,7 @@ export enum ComplianceCategory {
   DCR = '3. Dynamic Client Registration (RFC 7591)',
   OAUTH_FLOW = '4. OAuth 2.1 + PKCE Flow',
   JWT_VALIDATION = '5. JWT Access Token Validation (RFC 9068)',
-  PROTECTED_ACCESS = '6. Protected Resource Access',
+  PROTECTED_ACCESS = '6. Protected Resource Access'
 }
 
 export interface ComplianceTest {
@@ -66,5 +80,6 @@ export interface ServerTestConfig {
   clientId?: string; // Pre-configured client_id (when usePreConfiguredClient=true)
   clientSecret?: string; // Pre-configured client_secret (optional)
   scope?: string; // OAuth scopes to request (optional)
+  enableDebug?: boolean; // Enable debug mode to capture request/response data
   timeout?: number;
 }

@@ -26,7 +26,7 @@ export class DiscoveryClient {
       const response = await fetch(wellKnownUri, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json'
+          Accept: 'application/json'
         }
       });
 
@@ -69,7 +69,9 @@ export class DiscoveryClient {
     const metadata = await this.discover();
 
     if (!metadata.registration_endpoint) {
-      throw new Error('Server does not support dynamic client registration (no registration_endpoint in metadata)');
+      throw new Error(
+        'Server does not support dynamic client registration (no registration_endpoint in metadata)'
+      );
     }
 
     return metadata.registration_endpoint;

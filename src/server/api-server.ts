@@ -28,11 +28,13 @@ export class ComplianceAPIServer {
 
   private setupMiddleware() {
     // Enable CORS for frontend
-    this.app.use(cors({
-      origin: '*', // In production, restrict to specific origin
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    }));
+    this.app.use(
+      cors({
+        origin: '*', // In production, restrict to specific origin
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization']
+      })
+    );
 
     this.app.use(express.json());
     this.app.use(express.static(path.join(__dirname, '../../public')));
@@ -79,7 +81,7 @@ export class ComplianceAPIServer {
         console.error('Error starting tests:', error);
         res.status(500).json({
           error: 'Failed to start tests',
-          message: error instanceof Error ? error.message : String(error),
+          message: error instanceof Error ? error.message : String(error)
         });
       }
     });
@@ -108,7 +110,7 @@ export class ComplianceAPIServer {
         console.error('Error running tests:', error);
         res.status(500).json({
           error: 'Failed to run tests',
-          message: error instanceof Error ? error.message : String(error),
+          message: error instanceof Error ? error.message : String(error)
         });
       }
     });
@@ -136,7 +138,7 @@ export class ComplianceAPIServer {
         console.error('Error rerunning test:', error);
         res.status(500).json({
           error: 'Failed to rerun test',
-          message: error instanceof Error ? error.message : String(error),
+          message: error instanceof Error ? error.message : String(error)
         });
       }
     });
@@ -164,7 +166,7 @@ export class ComplianceAPIServer {
           res.status(500).json({
             status: 'error',
             testId,
-            error: error instanceof Error ? error.message : String(error),
+            error: error instanceof Error ? error.message : String(error)
           });
         });
     });
@@ -181,10 +183,14 @@ export class ComplianceAPIServer {
   }
 
   async start(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.app.listen(this.port, () => {
-        console.log(`\n🚀 MCP Compliance Tester API Server running on http://localhost:${this.port}`);
-        console.log(`\n📊 Open http://localhost:${this.port} in your browser to use the compliance tester\n`);
+        console.log(
+          `\n🚀 MCP Compliance Tester API Server running on http://localhost:${this.port}`
+        );
+        console.log(
+          `\n📊 Open http://localhost:${this.port} in your browser to use the compliance tester\n`
+        );
         resolve();
       });
     });
@@ -207,7 +213,7 @@ export class ComplianceAPIServer {
         command = `xdg-open ${url}`;
       }
 
-      exec(command, (error) => {
+      exec(command, error => {
         if (error) {
           console.log(`\n💡 Please open ${url} in your browser manually\n`);
         }

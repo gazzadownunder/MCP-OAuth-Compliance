@@ -16,7 +16,11 @@
       "Bash(tsx:*)",
       "Bash(npx tsx:*)",
       "Bash(del \"c:\\Users\\gazza\\Local Documents\\GitHub\\MCP Services\\DCR-Client\\src\\index.ts\")",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(cat:*)",
+      "Bash(npm test)",
+      "Bash(git log:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
