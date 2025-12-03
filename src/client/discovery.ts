@@ -3,6 +3,7 @@ import {
   AuthorizationServerMetadataSchema,
   getWellKnownUri
 } from '../types/oauth-discovery.js';
+import { fetchWithDebug } from '../utils/fetch-with-debug.js';
 
 /**
  * OAuth 2.0 Authorization Server Metadata Discovery Client
@@ -23,11 +24,12 @@ export class DiscoveryClient {
     const wellKnownUri = getWellKnownUri(this.issuerUrl);
 
     try {
-      const response = await fetch(wellKnownUri, {
+      const response = await fetchWithDebug(wellKnownUri, {
         method: 'GET',
         headers: {
           Accept: 'application/json'
-        }
+        },
+        debugLabel: `AS Discovery: ${this.issuerUrl}`
       });
 
       if (!response.ok) {
@@ -116,5 +118,12 @@ export class DiscoveryClient {
   async supportsResponseType(responseType: string): Promise<boolean> {
     const metadata = await this.discover();
     return metadata.response_types_supported?.includes(responseType) ?? false;
+  }
+
+  /**
+   * Get full authorization server metadata
+   */
+  async getMetadata(): Promise<AuthorizationServerMetadata> {
+    return await this.discover();
   }
 }

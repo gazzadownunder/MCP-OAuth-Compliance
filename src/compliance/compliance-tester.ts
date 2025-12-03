@@ -1,6 +1,6 @@
 /**
  * MCP Authorization Flow Compliance Tester
- * Tests MCP server compliance with RFC 9728, RFC 8414, RFC 7591, and OAuth 2.1
+ * Tests MCP server compliance with RFC 9728, RFC 8414, RFC 7591, OAuth 2.1, and MCP 2025-11-25
  */
 
 import {
@@ -9,11 +9,24 @@ import {
   ComplianceCategory,
   ServerTestConfig
 } from '../types/compliance.js';
+import { ProtocolVersion } from '../types/protocol-version.js';
+import { AuthorizationServerMetadata } from '../types/oauth-discovery.js';
 import { TEST_METADATA } from './test-metadata.js';
 import { generatePKCEParams } from '../utils/pkce.js';
 import { startCallbackServer } from '../utils/callback-server.js';
 import { exec } from 'child_process';
 import * as jose from 'jose';
+
+// NEW: MCP 2025-11-25 test modules
+import { runClientRegistrationTests } from './client-registration-tests.js';
+import { runPKCETests } from './pkce-tests.js';
+import { runResourceParameterTests } from './resource-parameter-tests.js';
+import { runTokenAudienceTests } from './token-audience-tests.js';
+import { runStepUpAuthTests } from './step-up-auth-tests.js';
+import { runPrivateKeyJWTTests } from './private-key-jwt-tests.js';
+import { runServerCapabilitiesTests } from './server-capabilities-tests.js';
+import { DCRClient } from '../client/dcr-client.js';
+import { getCertificateWarnings, clearCertificateWarnings } from '../utils/fetch-with-debug.js';
 
 export class MCPComplianceTester {
   private config: ServerTestConfig;
@@ -32,19 +45,194 @@ export class MCPComplianceTester {
     this.results = [];
     this.cache.clear();
 
-    // Run tests in order (some depend on previous results)
+    // Clear certificate warnings from previous test run
+    clearCertificateWarnings();
+
+    // Determine protocol version
+    const protocolVersion = this.config.protocolVersion || ProtocolVersion.PRE_2025_11_25;
+
+    // Test 0: Server connectivity check (fail fast if server not responding)
+    await this.testServerConnectivity();
+
+    // Check if server connectivity test failed
+    const connectivityTest = this.results.find(r => r.id === 'mcp-0.1');
+    if (connectivityTest?.status === 'fail') {
+      // Server is not responding, abort remaining tests
+      const endTime = new Date();
+      return {
+        serverUrl: this.config.serverUrl,
+        startTime,
+        endTime,
+        results: this.results,
+        summary: this.calculateSummary()
+      };
+    }
+
+    // Run discovery tests
     await this.testProtectedResourceMetadata();
     await this.testAuthorizationServerDiscovery();
 
-    if (!this.config.skipDCR) {
-      await this.testDynamicClientRegistration();
+    // Create DCR client (protocol-aware) if we have an authorization server
+    const authServer = this.cache.get('asUrl') as string | undefined;
+    let dcrClient: DCRClient | undefined;
+
+    if (authServer) {
+      dcrClient = new DCRClient({
+        transportType: 'http',
+        serverUrl: authServer,  // Use the authorization server URL, not the MCP server URL
+        protocolVersion
+      });
+
+      try {
+        await dcrClient.connect();
+      } catch (error) {
+        console.warn('DCR client connection failed:', error);
+      }
     }
 
+    // UNIFIED CLIENT REGISTRATION (always runs to show all registration methods)
+    // Even without a DCR client, we still want to show all three methods
+    // Pass cached AS metadata if available
+    const asMetadata = this.cache.get('asMetadata') as AuthorizationServerMetadata | undefined;
+    const { results, context } = await runClientRegistrationTests(
+      this.config,
+      dcrClient || null as any,  // Pass null if no client, tests will handle it
+      asMetadata  // Pass cached AS metadata
+    );
+    this.results.push(...results);
+
+    // Store registration context for OAuth flow
+    if (context) {
+      this.cache.set('client_registration', context);
+      this.cache.set('client_id', context.clientId);
+      this.cache.set('client_secret', context.clientSecret);
+      this.cache.set('redirect_uri', context.redirectUri);
+    }
+
+    // MCP 2025-11-25 specific tests
+    if (protocolVersion === ProtocolVersion.MCP_2025_11_25) {
+      // Get AS metadata from cache for MCP 2025-11-25 tests (reuse same variable)
+      // const asMetadata already defined above
+
+      // PKCE S256 enforcement tests
+      const pkceResults = await runPKCETests(this.config, asMetadata);
+      this.results.push(...pkceResults);
+
+      // Resource parameter tests
+      const resourceResults = await runResourceParameterTests(
+        this.config,
+        this.config.serverUrl
+      );
+      this.results.push(...resourceResults);
+    }
+
+    // OAuth flow tests (if enabled)
     if (!this.config.skipOAuthFlow) {
       await this.testOAuthFlow();
+
+      // MCP 2025-11-25 specific tests (after OAuth flow)
+      if (protocolVersion === ProtocolVersion.MCP_2025_11_25) {
+        const accessToken = this.cache.get('access_token') as string | undefined;
+        const authServerUrl = this.cache.get('asUrl') as string | undefined;
+        const asMetadata = this.cache.get('asMetadata') as Record<string, any> | undefined;
+
+        // Token audience validation
+        if (accessToken) {
+          const audienceResults = await runTokenAudienceTests(
+            this.config,
+            authServerUrl,
+            accessToken
+          );
+          this.results.push(...audienceResults);
+        }
+
+        // Step-up authorization tests
+        const stepUpResults = await runStepUpAuthTests(
+          this.config,
+          accessToken
+        );
+        this.results.push(...stepUpResults);
+
+        // Private Key JWT authentication tests
+        const privateKeyJWTResults = await runPrivateKeyJWTTests(
+          this.config,
+          asMetadata
+        );
+        this.results.push(...privateKeyJWTResults);
+      }
+
+      // Server capabilities discovery tests (LAST - after all OAuth tests)
+      // Run even if JWT validation fails - opaque tokens are valid too
+      const accessToken = this.cache.get('access_token') as string | undefined;
+      if (accessToken) {
+        if (this.config.enableDebug) {
+          console.log(`[runAllTests] Access token available, running server capabilities tests`);
+        }
+        await this.testServerCapabilities();
+      } else {
+        if (this.config.enableDebug) {
+          console.log(`[runAllTests] No access token available, skipping server capabilities tests`);
+        }
+      }
     }
 
     const endTime = new Date();
+
+    // Add certificate warnings as test results
+    const certWarnings = getCertificateWarnings();
+    if (certWarnings.length > 0) {
+      // Add a header result
+      this.results.push({
+        id: 'cert-warnings-header',
+        category: ComplianceCategory.PROTECTED_RESOURCE_METADATA,
+        requirement: 'Certificate Security Warnings',
+        status: 'warning',
+        message: `Detected ${certWarnings.length} certificate ${certWarnings.length === 1 ? 'warning' : 'warnings'} during testing`,
+        timestamp: new Date(),
+        indentLevel: 0
+      });
+
+      // Add individual certificate warnings
+      certWarnings.forEach((warning, index) => {
+        let recommendedAction = '';
+
+        switch (warning.type) {
+          case 'self-signed':
+            recommendedAction = 'For production: Use a certificate from a trusted CA (e.g., Let\'s Encrypt). For local development: Use mkcert to create locally-trusted certificates.';
+            break;
+          case 'expired':
+            recommendedAction = 'Renew the certificate immediately. Expired certificates pose a security risk.';
+            break;
+          case 'not-yet-valid':
+            recommendedAction = 'Check system clock or wait until the certificate\'s valid date.';
+            break;
+          case 'hostname-mismatch':
+            recommendedAction = 'Ensure the certificate is issued for the correct hostname, or update the hostname to match the certificate.';
+            break;
+          case 'untrusted-ca':
+            recommendedAction = 'Install the CA certificate in your system\'s trust store, or use a certificate from a publicly trusted CA.';
+            break;
+        }
+
+        this.results.push({
+          id: `cert-warning-${index + 1}`,
+          category: ComplianceCategory.PROTECTED_RESOURCE_METADATA,
+          requirement: `Certificate Warning: ${warning.type}`,
+          status: 'warning',
+          message: warning.message,
+          timestamp: new Date(),
+          indentLevel: 1,
+          details: {
+            hostname: warning.hostname,
+            issuer: warning.issuer,
+            subject: warning.subject,
+            validFrom: warning.validFrom,
+            validTo: warning.validTo,
+            recommendedAction
+          }
+        });
+      });
+    }
 
     return {
       serverUrl: this.config.serverUrl,
@@ -88,23 +276,248 @@ export class MCPComplianceTester {
     this.results = [];
     this.cache.clear();
 
+    const protocolVersion = this.config.protocolVersion || ProtocolVersion.PRE_2025_11_25;
+
+    // Handle connectivity test separately (doesn't need discovery)
+    if (testId.startsWith('mcp-0.')) {
+      await this.testServerConnectivity();
+      return this.results.find(r => r.id === testId) || null;
+    }
+
+    // Always run discovery tests first (needed for caching)
+    await this.testProtectedResourceMetadata();
+    await this.testAuthorizationServerDiscovery();
+
+    // Create DCR client if we have an authorization server
+    const authServer = this.cache.get('asUrl') as string | undefined;
+    let dcrClient: DCRClient | undefined;
+
+    if (authServer) {
+      dcrClient = new DCRClient({
+        transportType: 'http',
+        serverUrl: authServer,
+        protocolVersion
+      });
+
+      try {
+        await dcrClient.connect();
+      } catch (error) {
+        console.warn('DCR client connection failed:', error);
+      }
+    }
+
+    // Get AS metadata from cache
+    const asMetadata = this.cache.get('asMetadata') as AuthorizationServerMetadata | undefined;
+
     // Map test IDs to their test functions
-    if (testId.startsWith('prm-')) {
-      await this.testProtectedResourceMetadata();
-    } else if (testId.startsWith('as-')) {
-      await this.testProtectedResourceMetadata(); // Need PRM first
-      await this.testAuthorizationServerDiscovery();
-    } else if (testId.startsWith('dcr-')) {
-      await this.testProtectedResourceMetadata();
-      await this.testAuthorizationServerDiscovery();
-      await this.testDynamicClientRegistration();
+    if (testId.startsWith('prm-') || testId.startsWith('as-')) {
+      // Already run above
+    } else if (testId.startsWith('cr-') || testId.startsWith('client-reg-')) {
+      // Client registration tests
+      const { results, context } = await runClientRegistrationTests(
+        this.config,
+        dcrClient || null as any,
+        asMetadata
+      );
+      this.results.push(...results);
+
+      if (context) {
+        this.cache.set('client_registration', context);
+        this.cache.set('client_id', context.clientId);
+        this.cache.set('client_secret', context.clientSecret);
+        this.cache.set('redirect_uri', context.redirectUri);
+      }
+    } else if (testId.startsWith('pkce-')) {
+      // PKCE S256 enforcement tests
+      const pkceResults = await runPKCETests(this.config, asMetadata);
+      this.results.push(...pkceResults);
+    } else if (testId.startsWith('resource-')) {
+      // Resource parameter tests
+      const resourceResults = await runResourceParameterTests(
+        this.config,
+        this.config.serverUrl
+      );
+      this.results.push(...resourceResults);
     } else if (testId.startsWith('oauth-')) {
-      await this.testProtectedResourceMetadata();
-      await this.testAuthorizationServerDiscovery();
+      // Run client registration first if not already done
+      const { results, context } = await runClientRegistrationTests(
+        this.config,
+        dcrClient || null as any,
+        asMetadata
+      );
+      this.results.push(...results);
+
+      if (context) {
+        this.cache.set('client_registration', context);
+        this.cache.set('client_id', context.clientId);
+        this.cache.set('client_secret', context.clientSecret);
+        this.cache.set('redirect_uri', context.redirectUri);
+      }
+
       await this.testOAuthFlow();
+    } else if (testId.startsWith('jwt-')) {
+      // JWT validation tests (need OAuth flow first)
+      const { results, context } = await runClientRegistrationTests(
+        this.config,
+        dcrClient || null as any,
+        asMetadata
+      );
+      this.results.push(...results);
+
+      if (context) {
+        this.cache.set('client_registration', context);
+        this.cache.set('client_id', context.clientId);
+        this.cache.set('client_secret', context.clientSecret);
+        this.cache.set('redirect_uri', context.redirectUri);
+      }
+
+      await this.testOAuthFlow();
+    } else if (testId.startsWith('audience-')) {
+      // Token audience validation tests (need OAuth flow first)
+      const { results, context } = await runClientRegistrationTests(
+        this.config,
+        dcrClient || null as any,
+        asMetadata
+      );
+      this.results.push(...results);
+
+      if (context) {
+        this.cache.set('client_registration', context);
+        this.cache.set('client_id', context.clientId);
+        this.cache.set('client_secret', context.clientSecret);
+        this.cache.set('redirect_uri', context.redirectUri);
+      }
+
+      await this.testOAuthFlow();
+
+      const accessToken = this.cache.get('access_token') as string | undefined;
+      const authServerUrl = this.cache.get('asUrl') as string | undefined;
+
+      if (accessToken) {
+        const audienceResults = await runTokenAudienceTests(
+          this.config,
+          authServerUrl,
+          accessToken
+        );
+        this.results.push(...audienceResults);
+      }
+    } else if (testId.startsWith('step-')) {
+      // Step-up authorization tests (need OAuth flow first)
+      const { results, context } = await runClientRegistrationTests(
+        this.config,
+        dcrClient || null as any,
+        asMetadata
+      );
+      this.results.push(...results);
+
+      if (context) {
+        this.cache.set('client_registration', context);
+        this.cache.set('client_id', context.clientId);
+        this.cache.set('client_secret', context.clientSecret);
+        this.cache.set('redirect_uri', context.redirectUri);
+      }
+
+      await this.testOAuthFlow();
+
+      const accessToken = this.cache.get('access_token') as string | undefined;
+      const stepUpResults = await runStepUpAuthTests(this.config, accessToken);
+      this.results.push(...stepUpResults);
+    } else if (testId.startsWith('pkjwt-')) {
+      // Private Key JWT tests
+      const privateKeyJWTResults = await runPrivateKeyJWTTests(
+        this.config,
+        asMetadata
+      );
+      this.results.push(...privateKeyJWTResults);
+    } else if (testId.startsWith('cap-')) {
+      // Server capabilities tests
+      // Check if we already have an access token from a previous run
+      const accessToken = this.cache.get('access_token') as string | undefined;
+
+      if (!accessToken) {
+        // Need to run OAuth flow first to get access token
+        await this.testOAuthFlow();
+      }
+
+      // Now run server capabilities tests
+      await this.testServerCapabilities();
     }
 
     return this.results.find(r => r.id === testId) || null;
+  }
+
+  // ==================================================================
+  // 0. Server Connectivity Check
+  // ==================================================================
+
+  private async testServerConnectivity() {
+    const category = 'MCP 0: Pre-Flight Server Connectivity Check';
+
+    const serverUrl = this.config.serverUrl;
+    // Construct the actual MCP endpoint URL
+    const mcpUrl = serverUrl.endsWith('/mcp') ? serverUrl : `${serverUrl}/mcp`;
+    const timeout = 5000; // 5 second timeout for connectivity check
+
+    if (this.config.enableDebug) {
+      console.log(`\n🔍 [Connectivity Check] Testing MCP endpoint: ${mcpUrl}`);
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(mcpUrl, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'Accept': 'text/html,application/json,*/*'
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (this.config.enableDebug) {
+        console.log(`✅ [Connectivity Check] Server responded with status ${response.status}`);
+      }
+
+      this.addResult({
+        id: 'mcp-0.1',
+        category,
+        requirement: 'Server is reachable and responding',
+        status: 'pass',
+        message: `Server responded with HTTP ${response.status}`,
+        expected: 'HTTP response (any status code)',
+        actual: `HTTP ${response.status} ${response.statusText}`,
+        indentLevel: 0
+      });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage.includes('aborted') || errorMessage.includes('timeout');
+
+      if (this.config.enableDebug) {
+        console.log(`❌ [Connectivity Check] Server not reachable: ${errorMessage}`);
+      }
+
+      this.addResult({
+        id: 'mcp-0.1',
+        category,
+        requirement: 'Server is reachable and responding',
+        status: 'fail',
+        message: isTimeout
+          ? `Server did not respond within ${timeout}ms - check if server is running`
+          : `Cannot connect to server: ${errorMessage}`,
+        expected: 'HTTP response (any status code)',
+        actual: isTimeout ? 'Request timeout' : `Connection error: ${errorMessage}`,
+        indentLevel: 0,
+        remediation: [
+          '1. Verify the server is running and listening on the specified URL',
+          '2. Check that the URL is correct (including protocol, hostname, and port)',
+          '3. Ensure there are no firewall or network issues blocking the connection',
+          '4. For HTTPS servers, verify the certificate is valid'
+        ].join('\n')
+      });
+    }
   }
 
   // ==================================================================
@@ -719,13 +1132,16 @@ export class MCPComplianceTester {
 
     // Test 1.9: scopes_supported present (RECOMMENDED, not required)
     const hasScopes = Array.isArray(prmData.scopes_supported);
+    const scopesNotEmpty = hasScopes && prmData.scopes_supported.length > 0;
     this.addResult({
       id: 'prm-1.9',
       category,
       requirement: 'PRM contains scopes_supported (RECOMMENDED)',
-      status: hasScopes ? 'pass' : 'skip',
-      message: hasScopes
-        ? 'scopes_supported present'
+      status: scopesNotEmpty ? 'pass' : hasScopes ? 'warning' : 'skip',
+      message: scopesNotEmpty
+        ? 'scopes_supported present with values'
+        : hasScopes
+        ? 'scopes_supported is present but empty (should include supported scopes)'
         : 'scopes_supported missing (RECOMMENDED but not required)',
       details: { scopes_supported: prmData.scopes_supported },
       rfcReference: 'RFC 9728 Section 3',
@@ -1081,274 +1497,68 @@ export class MCPComplianceTester {
   // 3. Dynamic Client Registration (RFC 7591)
   // ==================================================================
 
+  /**
+   * DEPRECATED: This method is replaced by runClientRegistrationTests()
+   * Kept for backward compatibility with rerunSingleTest()
+   */
   private async testDynamicClientRegistration() {
-    const category = ComplianceCategory.DCR;
-    const asMetadata = this.cache.get('asMetadata') as Record<string, unknown> | undefined;
-    const registrationEndpoint = asMetadata?.registration_endpoint as string | undefined;
+    // Determine protocol version
+    const protocolVersion = this.config.protocolVersion || ProtocolVersion.PRE_2025_11_25;
 
-    // Skip DCR if using pre-configured client
-    if (this.config.usePreConfiguredClient) {
+    // Get authorization server
+    const authServer = this.cache.get('authorization_server') as string | undefined;
+
+    if (!authServer) {
       this.addResult({
-        id: 'dcr-3.1',
-        category,
-        requirement: 'DCR tests',
-        status: 'skip',
-        message: 'Using pre-configured client_id - DCR not required'
+        id: 'client-reg-error',
+        category: ComplianceCategory.CLIENT_REGISTRATION,
+        requirement: 'Client Registration',
+        status: 'fail',
+        message: 'No authorization server discovered'
       });
       return;
     }
 
-    if (!registrationEndpoint) {
-      this.addResult({
-        id: 'dcr-3.1',
-        category,
-        requirement: 'Registration endpoint accepts POST',
-        status: 'skip',
-        message: 'No registration endpoint available from AS metadata'
-      });
-      return;
-    }
+    // Create DCR client (protocol-aware)
+    const dcrClient = new DCRClient({
+      transportType: 'http',
+      serverUrl: this.config.serverUrl,
+      protocolVersion
+    });
 
     try {
-      // Use configured callback port or default to 3000
-      const callbackPort = this.config.callbackPort || 3000;
-      const clientMetadata: Record<string, any> = {
-        client_name: 'MCP Compliance Tester',
-        redirect_uris: [`http://localhost:${callbackPort}/callback`],
-        grant_types: ['authorization_code'],
-        response_types: ['code'],
-        token_endpoint_auth_method: 'none'
-      };
-
-      // Only include scope if configured (some servers reject scope in DCR)
-      if (this.config.scope) {
-        clientMetadata.scope = this.config.scope;
-      }
-
-      const response = await this.fetchWithTimeout(registrationEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clientMetadata)
-      });
-
-      const debugInfo = this.getLastDebugInfo();
-
-      // Test 3.1: Endpoint accepts POST
-      this.addResult({
-        id: 'dcr-3.1',
-        category,
-        requirement: 'Registration endpoint accepts POST',
-        status: response.status !== 405 ? 'pass' : 'fail',
-        message: response.status === 405 ? 'POST method not allowed' : undefined,
-        details: { status: response.status },
-        debug: debugInfo
-      });
-
-      // Test 3.2: Returns 201 on success (RFC 7591 requirement)
-      if (response.ok) {
-        this.addResult({
-          id: 'dcr-3.2',
-          category,
-          requirement: 'Returns HTTP 201 on successful registration (REQUIRED)',
-          status: response.status === 201 ? 'pass' : 'fail',
-          message:
-            response.status !== 201 ? `RFC 7591 requires 201, got ${response.status}` : undefined,
-          details: { status: response.status }
-        });
-
-        const registrationResponse = await response.json();
-        this.cache.set('clientRegistration', registrationResponse);
-
-        // Test remaining registration response fields
-        await this.testRegistrationResponseFields(category, registrationResponse);
-      } else {
-        // Registration failed - try to get error details
-        let errorBody: any = null;
-        try {
-          errorBody = await response.json();
-        } catch {
-          // Response body might not be JSON
-        }
-
-        this.addResult({
-          id: 'dcr-3.2',
-          category,
-          requirement: 'Returns HTTP 201 on successful registration (REQUIRED)',
-          status: 'fail',
-          message: `Registration failed with HTTP ${response.status}`,
-          details: {
-            status: response.status,
-            requestBody: clientMetadata,
-            errorResponse: errorBody
-          }
-        });
-
-        // Fallback Test 3.2a: Try with refresh_token grant type
-        // Some servers (like FastMCP) incorrectly require refresh_token despite RFC 7591 not mandating it
-        const fallbackMetadata = {
-          ...clientMetadata,
-          grant_types: ['authorization_code', 'refresh_token']
-        };
-
-        let fallbackResponse: Response | null = null;
-        try {
-          fallbackResponse = await this.fetchWithTimeout(registrationEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(fallbackMetadata)
-          });
-
-          if (fallbackResponse.ok) {
-            // Fallback succeeded - server has non-compliant strict requirements
-            this.addResult({
-              id: 'dcr-3.2a',
-              category,
-              requirement: 'Accepts registration with refresh_token grant (FALLBACK)',
-              status: 'warning',
-              message:
-                'Registration succeeded when refresh_token was added to grant_types. This indicates server has stricter requirements than RFC 7591.',
-              expected: 'Server should accept authorization_code alone per RFC 7591',
-              actual: 'Server requires refresh_token in grant_types',
-              details: {
-                status: fallbackResponse.status,
-                requestBody: fallbackMetadata
-              },
-              rfcReference: 'RFC 7591 Section 2',
-              rfcUrl: 'https://www.rfc-editor.org/rfc/rfc7591.html#section-2',
-              remediation:
-                'RFC 7591 does not require refresh_token grant type for registration. Your server should accept clients registering with only authorization_code. Consider relaxing this validation or document this as a server-specific requirement.',
-              indentLevel: 1
-            });
-
-            // Process the successful fallback registration
-            const registrationResponse = await fallbackResponse.json();
-            this.cache.set('clientRegistration', registrationResponse);
-
-            // Continue with remaining tests using the fallback registration
-            await this.testRegistrationResponseFields(category, registrationResponse);
-          } else {
-            // Fallback also failed
-            this.addResult({
-              id: 'dcr-3.2a',
-              category,
-              requirement: 'Accepts registration with refresh_token grant (FALLBACK)',
-              status: 'fail',
-              message: `Fallback registration also failed with HTTP ${fallbackResponse.status}`,
-              details: {
-                status: fallbackResponse.status,
-                requestBody: fallbackMetadata
-              },
-              indentLevel: 1
-            });
-
-            // Skip remaining tests
-            ['dcr-3.3', 'dcr-3.4', 'dcr-3.5'].forEach((testId, index) => {
-              const requirements = [
-                'Registration response contains client_id (REQUIRED)',
-                'client_secret_expires_at present when client_secret issued (REQUIRED)',
-                'Supports PKCE (token_endpoint_auth_method: none)'
-              ];
-              this.addResult({
-                id: testId,
-                category,
-                requirement: requirements[index],
-                status: 'skip',
-                message: 'Skipped due to registration failure'
-              });
-            });
-          }
-        } catch (fallbackError) {
-          this.addResult({
-            id: 'dcr-3.2a',
-            category,
-            requirement: 'Accepts registration with refresh_token grant (FALLBACK)',
-            status: 'fail',
-            message: `Fallback test failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
-            indentLevel: 1
-          });
-
-          // Skip remaining tests
-          ['dcr-3.3', 'dcr-3.4', 'dcr-3.5'].forEach((testId, index) => {
-            const requirements = [
-              'Registration response contains client_id (REQUIRED)',
-              'client_secret_expires_at present when client_secret issued (REQUIRED)',
-              'Supports PKCE (token_endpoint_auth_method: none)'
-            ];
-            this.addResult({
-              id: testId,
-              category,
-              requirement: requirements[index],
-              status: 'skip',
-              message: 'Skipped due to registration failure'
-            });
-          });
-        }
-      }
+      await dcrClient.connect();
     } catch (error) {
       this.addResult({
-        id: 'dcr-3.1',
-        category,
-        requirement: 'Registration endpoint accepts POST',
+        id: 'client-reg-error',
+        category: ComplianceCategory.CLIENT_REGISTRATION,
+        requirement: 'Client Registration',
         status: 'fail',
-        message: error instanceof Error ? error.message : String(error)
+        message: `DCR client connection failed: ${error instanceof Error ? error.message : String(error)}`
       });
-    }
-  }
-
-  // Helper method to test registration response fields
-  private async testRegistrationResponseFields(
-    category: ComplianceCategory,
-    registrationResponse: any
-  ) {
-    // Test 3.3: Response contains client_id (REQUIRED per RFC 7591)
-    const hasClientId = 'client_id' in registrationResponse;
-    this.addResult({
-      id: 'dcr-3.3',
-      category,
-      requirement: 'Registration response contains client_id (REQUIRED)',
-      status: hasClientId ? 'pass' : 'fail',
-      message: hasClientId ? undefined : 'client_id REQUIRED by RFC 7591 but missing from response',
-      details: { client_id: registrationResponse.client_id }
-    });
-
-    // Test 3.4: Validates client_secret_expires_at if client_secret issued
-    if ('client_secret' in registrationResponse) {
-      const hasExpiresAt = 'client_secret_expires_at' in registrationResponse;
-      this.addResult({
-        id: 'dcr-3.4',
-        category,
-        requirement: 'client_secret_expires_at present when client_secret issued (REQUIRED)',
-        status: hasExpiresAt ? 'pass' : 'fail',
-        message: hasExpiresAt
-          ? undefined
-          : 'client_secret_expires_at REQUIRED when client_secret is issued',
-        details: {
-          client_secret_present: true,
-          client_secret_expires_at: registrationResponse.client_secret_expires_at
-        }
-      });
-    } else {
-      this.addResult({
-        id: 'dcr-3.4',
-        category,
-        requirement: 'client_secret_expires_at present when client_secret issued (REQUIRED)',
-        status: 'skip',
-        message: 'No client_secret issued (expected for public clients with PKCE)'
-      });
+      return;
     }
 
-    // Test 3.5: Supports PKCE (token_endpoint_auth_method: none)
-    const supportsPKCE = registrationResponse.token_endpoint_auth_method === 'none';
-    this.addResult({
-      id: 'dcr-3.5',
-      category,
-      requirement: 'Supports PKCE (token_endpoint_auth_method: none)',
-      status: supportsPKCE ? 'pass' : 'skip',
-      message: supportsPKCE
-        ? undefined
-        : `Got token_endpoint_auth_method: ${registrationResponse.token_endpoint_auth_method} (PKCE uses 'none')`,
-      details: { token_endpoint_auth_method: registrationResponse.token_endpoint_auth_method }
-    });
+    // Use unified client registration tests
+    const asMetadata = this.cache.get('asMetadata') as Record<string, any> | undefined;
+    const { results, context } = await runClientRegistrationTests(
+      this.config,
+      dcrClient,
+      asMetadata
+    );
+
+    // Add all results
+    results.forEach(result => this.addResult(result));
+
+    // Store registration context
+    if (context) {
+      this.cache.set('client_registration', context);
+      this.cache.set('client_id', context.clientId);
+      this.cache.set('client_secret', context.clientSecret);
+      this.cache.set('redirect_uri', context.redirectUri);
+    }
+
+    return;
   }
 
   // ==================================================================
@@ -1410,10 +1620,31 @@ export class MCPComplianceTester {
       details: { code_challenge_methods_supported: codeChallengeMethods || 'not specified' }
     });
 
+    // Show which registration method's credentials will be used
+    const clientRegistrationContext = this.cache.get('client_registration') as any;
+    if (clientRegistrationContext) {
+      this.addResult({
+        id: 'oauth-4.2a',
+        category,
+        requirement: 'Client credentials for OAuth flow',
+        status: 'info',
+        message: `Using credentials from: ${clientRegistrationContext.method}`,
+        details: {
+          registrationMethod: clientRegistrationContext.method,
+          clientId: clientRegistrationContext.clientId
+        }
+      });
+    }
+
     // If interactive testing enabled, execute the full OAuth flow
+    console.log(`[testOAuthFlow] interactiveAuth: ${this.config.interactiveAuth}`);
     if (this.config.interactiveAuth) {
+      console.log(`[testOAuthFlow] Executing interactive OAuth flow...`);
       await this.executeOAuthFlow(category, asMetadata);
+      console.log(`[testOAuthFlow] OAuth flow completed`);
     } else {
+      console.log(`[testOAuthFlow] Skipping interactive auth - interactiveAuth is false`);
+
       // Skip interactive tests
       this.addResult({
         id: 'oauth-4.3',
@@ -1459,9 +1690,6 @@ export class MCPComplianceTester {
   ) {
     const authorizationEndpoint = asMetadata.authorization_endpoint as string | undefined;
     const tokenEndpoint = asMetadata.token_endpoint as string | undefined;
-    const clientRegistration = this.cache.get('clientRegistration') as
-      | Record<string, unknown>
-      | undefined;
 
     if (!authorizationEndpoint || !tokenEndpoint) {
       this.addResult({
@@ -1474,46 +1702,51 @@ export class MCPComplianceTester {
       return;
     }
 
-    // Use pre-configured client or DCR-registered client
-    let clientId: string;
-    let redirectUri: string;
+    // Get client credentials from the successful registration method
+    // Priority is already determined by runClientRegistrationTests()
+    const clientId = this.cache.get('client_id') as string | undefined;
+    const registeredRedirectUri = this.cache.get('redirect_uri') as string | undefined;
 
-    if (this.config.usePreConfiguredClient && this.config.clientId) {
-      clientId = this.config.clientId;
-      // clientSecret available at this.config.clientSecret if needed for confidential clients
-      // Use explicit redirectUri if provided, otherwise construct from callbackPort
-      if (this.config.redirectUri) {
-        redirectUri = this.config.redirectUri;
-      } else {
-        const callbackPort = this.config.callbackPort || 3000;
-        redirectUri = `http://localhost:${callbackPort}/callback`;
-      }
-    } else if (clientRegistration && clientRegistration.client_id) {
-      clientId = clientRegistration.client_id as string;
-      // clientSecret available at clientRegistration.client_secret if needed
-      redirectUri =
-        (clientRegistration.redirect_uris as string[])?.[0] || 'http://localhost:3000/callback';
-    } else {
+    console.log(`[executeOAuthFlow] clientId from cache: ${clientId ? 'present' : 'MISSING'}`);
+    console.log(`[executeOAuthFlow] redirectUri from cache: ${registeredRedirectUri ? 'present' : 'missing'}`);
+
+    if (!clientId) {
+      console.log(`[executeOAuthFlow] No clientId - returning early`);
       this.addResult({
         id: 'oauth-4.3',
         category,
         requirement: 'Supports resource parameter (RFC 8707)',
         status: 'skip',
-        message: 'No client available - either DCR must succeed or provide pre-configured client_id'
+        message: 'No client available - client registration must succeed (Preregistration, Client ID Metadata, or DCR)'
       });
       return;
     }
 
-    // Extract port from redirectUri or use callbackPort config
-    let callbackPort = this.config.callbackPort || 3000;
-    if (this.config.redirectUri) {
+    // Determine smart default callback port (if not explicitly configured)
+    let defaultCallbackPort = 3000;
+    if (!this.config.callbackPort && this.config.serverUrl) {
+      // If callback port not specified, use MCP server port + 2 to avoid conflicts
       try {
-        const redirectUrl = new URL(this.config.redirectUri);
-        callbackPort =
-          parseInt(redirectUrl.port, 10) || (redirectUrl.protocol === 'https:' ? 443 : 80);
+        const serverUrl = new URL(this.config.serverUrl);
+        const serverPort = serverUrl.port ? parseInt(serverUrl.port) : (serverUrl.protocol === 'https:' ? 443 : 80);
+        defaultCallbackPort = serverPort + 2;  // +2 to skip server port and potential auth server port
+        console.log(`Smart callback port selection: Using port ${defaultCallbackPort} (MCP server port ${serverPort} + 2)`);
       } catch {
-        // Invalid URL, use default port
+        // Invalid server URL, use default
       }
+    }
+
+    // Use redirect URI from registration, or construct from callback port
+    const finalRedirectUri = registeredRedirectUri || `http://localhost:${this.config.callbackPort || defaultCallbackPort}/callback`;
+
+    // Extract port from redirect URI
+    let callbackPort = this.config.callbackPort || defaultCallbackPort;
+    try {
+      const redirectUrl = new URL(finalRedirectUri);
+      callbackPort =
+        parseInt(redirectUrl.port, 10) || (redirectUrl.protocol === 'https:' ? 443 : 80);
+    } catch {
+      // Invalid URL, use default port
     }
 
     // Generate PKCE parameters
@@ -1524,18 +1757,38 @@ export class MCPComplianceTester {
     console.log('You will be redirected to your browser to authenticate.');
 
     // Start callback server first - this will fail fast if all ports are in use
-    // Pass serverUrl so callback server can avoid using the same port as the server under test
+    // Pass serverUrl and AS endpoints so callback server can avoid port conflicts
     let callbackServer: Awaited<ReturnType<typeof startCallbackServer>> | undefined;
     let actualPort: number;
+    let actualRedirectUri = finalRedirectUri;
+
+    // Collect URLs to avoid (MCP server and authorization server endpoints)
+    const urlsToAvoid: string[] = [];
+
+    // Add authorization server issuer (base URL)
+    const issuer = asMetadata.issuer as string | undefined;
+    if (issuer) urlsToAvoid.push(issuer);
+
+    // Add authorization server endpoints
+    if (authorizationEndpoint) urlsToAvoid.push(authorizationEndpoint);
+    if (tokenEndpoint) urlsToAvoid.push(tokenEndpoint);
+
+    // Log port information for debugging
+    console.log(`Attempting to start callback server on port ${callbackPort}`);
+    console.log(`MCP Server URL: ${this.config.serverUrl || 'not specified'}`);
+    if (urlsToAvoid.length > 0) {
+      console.log(`Authorization server endpoints to avoid: ${urlsToAvoid.join(', ')}`);
+    }
+
     try {
-      callbackServer = await startCallbackServer(callbackPort, this.config.serverUrl);
+      callbackServer = await startCallbackServer(callbackPort, this.config.serverUrl, urlsToAvoid);
       actualPort = callbackServer.actualPort;
 
       // Update redirectUri if port changed
       if (actualPort !== callbackPort) {
-        const originalUri = new URL(redirectUri);
-        redirectUri = `${originalUri.protocol}//${originalUri.hostname}:${actualPort}${originalUri.pathname}`;
-        console.log(`📝 Updated redirect URI to: ${redirectUri}`);
+        const originalUri = new URL(finalRedirectUri);
+        actualRedirectUri = `${originalUri.protocol}//${originalUri.hostname}:${actualPort}${originalUri.pathname}`;
+        console.log(`📝 Updated redirect URI to: ${actualRedirectUri}`);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1555,12 +1808,10 @@ export class MCPComplianceTester {
       const authUrl = new URL(authorizationEndpoint);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
+      authUrl.searchParams.set('redirect_uri', actualRedirectUri);
 
-      // Use configured scope, or scope from DCR registration (if any)
-      // Don't default to openid - let the server decide if no scope specified
-      const registeredScope = (clientRegistration?.scope as string) || undefined;
-      const scopeToUse = this.config.scope || registeredScope;
+      // Use configured scope if provided
+      const scopeToUse = this.config.scope;
       if (scopeToUse) {
         authUrl.searchParams.set('scope', scopeToUse);
       }
@@ -1643,7 +1894,7 @@ export class MCPComplianceTester {
       await this.exchangeCodeForTokens(category, tokenEndpoint, {
         code: callback.code,
         clientId,
-        redirectUri,
+        redirectUri: actualRedirectUri,
         codeVerifier: pkce.codeVerifier,
         resourceUri: this.config.resourceUri
       });
@@ -1728,6 +1979,19 @@ export class MCPComplianceTester {
       const tokenResponse = (await response.json()) as Record<string, any>;
       this.cache.set('tokenResponse', tokenResponse);
 
+      if (this.config.enableDebug) {
+        console.log('[executeOAuthFlow] Token response keys:', Object.keys(tokenResponse));
+        console.log('[executeOAuthFlow] Token response:', JSON.stringify(tokenResponse, null, 2));
+      }
+
+      // Store access token separately for step-up auth and other tests
+      if (tokenResponse.access_token) {
+        console.log(`[executeOAuthFlow] Setting access_token in cache`);
+        this.cache.set('access_token', tokenResponse.access_token);
+      } else {
+        console.log(`[executeOAuthFlow] WARNING: No access_token field in token response. Available fields: ${Object.keys(tokenResponse).join(', ')}`);
+      }
+
       // Test 4.5: Access token issued
       const hasAccessToken = 'access_token' in tokenResponse;
       this.addResult({
@@ -1735,8 +1999,8 @@ export class MCPComplianceTester {
         category,
         requirement: 'Issues access_token (REQUIRED)',
         status: hasAccessToken ? 'pass' : 'fail',
-        message: hasAccessToken ? undefined : 'access_token missing from token response',
-        details: { has_access_token: hasAccessToken },
+        message: hasAccessToken ? undefined : `Token response missing access_token field. Available fields: ${Object.keys(tokenResponse).join(', ')}`,
+        details: { has_access_token: hasAccessToken, token_response_keys: Object.keys(tokenResponse) },
         rfcReference: 'RFC 6749 Section 5.1',
         rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1'
       });
@@ -1863,6 +2127,8 @@ export class MCPComplianceTester {
     });
 
     if (!isJWT) {
+      // Opaque tokens are valid OAuth tokens, just not JWTs
+      // Server capabilities tests will still run with the access token
       this.addResult({
         id: 'jwt-5.2',
         category,
@@ -2257,6 +2523,41 @@ export class MCPComplianceTester {
     });
 
     console.log('✅ JWT validation tests completed\n');
+  }
+
+  // ==================================================================
+  // Server Capabilities Discovery Tests
+  // ==================================================================
+
+  /**
+   * Test MCP server capabilities discovery (tools, resources, prompts)
+   */
+  private async testServerCapabilities() {
+    console.log('[testServerCapabilities] Starting server capabilities tests');
+    const accessToken = this.cache.get('access_token') as string | undefined;
+    console.log(`[testServerCapabilities] Access token present: ${!!accessToken}`);
+
+    if (!accessToken) {
+      console.log('[testServerCapabilities] No access token, adding skip result');
+      this.addResult({
+        id: 'cap-10.0',
+        category: ComplianceCategory.SERVER_CAPABILITIES,
+        requirement: 'Server capabilities discovery requires access token',
+        status: 'skip',
+        message: 'No access token available - OAuth flow must complete first'
+      });
+      return;
+    }
+
+    // Run server capabilities tests
+    const capabilitiesResults = await runServerCapabilitiesTests({
+      serverUrl: this.config.serverUrl,
+      accessToken,
+      enableDebug: this.config.enableDebug,
+      allowHttpMcpConnection: this.config.allowHttpMcpConnection
+    });
+
+    this.results.push(...capabilitiesResults);
   }
 
   /**

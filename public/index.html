@@ -20,8 +20,61 @@
         }
 
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
+            width: 100%;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 450px 1fr 400px;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .config-column {
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .results-column {
+            min-height: 100vh;
+        }
+
+        .overview-column {
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        @media (max-width: 1400px) {
+            .main-layout {
+                grid-template-columns: 450px 1fr;
+            }
+
+            .overview-column {
+                display: none;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .config-column {
+                position: relative;
+                top: 0;
+                max-height: none;
+            }
+
+            .overview-column {
+                display: none;
+            }
         }
 
         .header {
@@ -102,7 +155,7 @@
         .options-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 12px;
             padding: 16px 20px;
             background: rgba(255, 255, 255, 0.03);
             cursor: pointer;
@@ -317,6 +370,14 @@
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
             margin-bottom: 30px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: #1e1e2e;
+            padding: 20px;
+            margin: -30px -30px 30px -30px;
+            border-bottom: 2px solid #3a3a4e;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .summary-card {
@@ -324,6 +385,18 @@
             border-radius: 8px;
             text-align: center;
             border: 1px solid #3a3a4e;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .summary-card.active {
+            border: 2px solid #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
         }
 
         .summary-card.passed {
@@ -350,6 +423,12 @@
             border-color: #5a4a2e;
         }
 
+        .summary-card.info {
+            background: #1a2a3a;
+            color: #60a5fa;
+            border-color: #2e4a5a;
+        }
+
         .summary-card .number {
             font-size: 2.5em;
             font-weight: bold;
@@ -364,15 +443,55 @@
 
         .category {
             margin-bottom: 30px;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: rgba(136, 146, 240, 0.1);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+            border-bottom: 2px solid #3a3a4e;
+        }
+
+        .category-header:hover {
+            background: rgba(136, 146, 240, 0.15);
+        }
+
+        .category-arrow {
+            font-size: 1.2em;
+            color: #8892f0;
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+            width: 20px;
+            text-align: center;
+        }
+
+        .category-arrow.collapsed {
+            transform: rotate(-90deg);
         }
 
         .category-title {
             font-size: 1.3em;
             font-weight: 600;
             color: #e0e0e0;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #3a3a4e;
+            margin: 0;
+            flex: 1;
+        }
+
+        .category-content {
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .category-content.collapsed {
+            display: none;
         }
 
         .test-result {
@@ -383,6 +502,10 @@
             border-radius: 8px;
             background: #2a2a3e;
             border: 1px solid #3a3a4e;
+        }
+
+        .test-result.filtered-hidden {
+            display: none;
         }
 
         .test-result.indent-1 {
@@ -413,6 +536,10 @@
             border-left: 4px solid #fb923c;
         }
 
+        .test-result.info {
+            border-left: 4px solid #60a5fa;
+        }
+
         .test-icon {
             font-size: 1.5em;
             margin-right: 15px;
@@ -423,6 +550,7 @@
         .test-icon.fail { color: #f87171; }
         .test-icon.skip { color: #fbbf24; }
         .test-icon.warning { color: #fb923c; }
+        .test-icon.info { color: #60a5fa; }
 
         .test-content {
             flex: 1;
@@ -454,6 +582,73 @@
             white-space: pre-wrap;
         }
 
+        /* Overview Panel Styles */
+        .overview-section {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .overview-section:hover {
+            border-color: rgba(102, 126, 234, 0.3);
+        }
+
+        .overview-section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .overview-status-icon {
+            font-size: 1.2em;
+            flex-shrink: 0;
+        }
+
+        .overview-status-icon.ready { color: #4ade80; }
+        .overview-status-icon.partial { color: #fbbf24; }
+        .overview-status-icon.not-ready { color: #f87171; }
+        .overview-status-icon.unknown { color: #9ca3af; }
+
+        .overview-section-title {
+            font-weight: 600;
+            color: #e0e0e0;
+            font-size: 0.95em;
+            flex: 1;
+        }
+
+        .overview-section-description {
+            font-size: 0.85em;
+            color: #b0b0b0;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .overview-requirements {
+            font-size: 0.8em;
+            color: #9ca3af;
+            line-height: 1.5;
+        }
+
+        .overview-requirement {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .overview-requirement-icon {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .overview-requirement.met { color: #4ade80; }
+        .overview-requirement.not-met { color: #f87171; }
+        .overview-requirement.optional { color: #fbbf24; }
+
         .footer {
             text-align: center;
             color: #b0b0b0;
@@ -466,10 +661,16 @@
     <div class="container">
         <div class="header">
             <h1>🔐 MCP Authorization Flow Compliance Tester</h1>
-            <p>Test your MCP server's compliance with RFC 9728, RFC 8414, RFC 7591, and OAuth 2.1</p>
+            <p>Test your MCP server's compliance with RFC 9728, RFC 8414, RFC 7591, OAuth 2.1, and MCP 2025-11-25</p>
+            <p style="font-size: 0.9em; margin-top: 8px; opacity: 0.8;">
+                Supports MCP spec version 2025-11-25 and previous versions
+            </p>
         </div>
 
-        <div class="card">
+        <div class="main-layout">
+            <!-- Configuration Column -->
+            <div class="config-column">
+                <div class="card">
             <form id="testForm">
                 <div class="input-group">
                     <label for="serverUrl">MCP Server URL</label>
@@ -482,15 +683,18 @@
                     >
                 </div>
 
+                <!-- Protocol Version: Hidden, defaults to MCP 2025-11-25 -->
+                <input type="hidden" id="protocolVersion" name="protocolVersion" value="2025-11-25">
+
                 <!-- Options Section -->
                 <div class="options-container">
                     <div class="options-header" id="optionsHeader">
-                        <h3>Options</h3>
                         <span class="expand-arrow">▶</span>
+                        <h3>Options</h3>
                     </div>
                     <div class="options-content" id="optionsContent">
 
-                <!-- Skip DCR Tests -->
+                <!-- Skip Client Registration Tests -->
                 <div class="option-section" data-option="skipDCR">
                     <div class="option-header">
                         <label class="toggle-switch" onclick="event.stopPropagation()">
@@ -498,8 +702,8 @@
                             <span class="toggle-slider"></span>
                         </label>
                         <div class="option-title">
-                            <h3>Skip DCR Tests</h3>
-                            <p>Bypass Dynamic Client Registration testing</p>
+                            <h3>Skip Client Registration Tests</h3>
+                            <p id="skipDCRDescription">Bypass client registration</p>
                         </div>
                     </div>
                 </div>
@@ -513,7 +717,7 @@
                         </label>
                         <div class="option-title">
                             <h3>Skip OAuth Flow Tests</h3>
-                            <p>Bypass OAuth authorization flow testing</p>
+                            <p>Bypass OAuth 2.1 authorization flow, PKCE, and token validation tests</p>
                         </div>
                     </div>
                 </div>
@@ -522,15 +726,15 @@
                 <div class="option-section" data-option="interactiveAuth" data-content="oauthOptions">
                     <div class="option-header">
                         <label class="toggle-switch" onclick="event.stopPropagation()">
-                            <input type="checkbox" id="interactiveAuth" name="interactiveAuth">
+                            <input type="checkbox" id="interactiveAuth" name="interactiveAuth" checked>
                             <span class="toggle-slider"></span>
                         </label>
                         <div class="option-title">
                             <h3>Interactive OAuth Flow</h3>
-                            <p>Enable browser-based user authentication</p>
+                            <p>Enable browser-based user authentication with PKCE (S256 for MCP 2025-11-25)</p>
                         </div>
                     </div>
-                    <div class="option-content" id="oauthOptions">
+                    <div class="option-content expanded" id="oauthOptions">
                         <div class="option-fields">
                             <div>
                                 <label for="callbackPort">OAuth Callback Port</label>
@@ -545,14 +749,24 @@
                                 <small>Port for OAuth callback server (default: 3000)</small>
                             </div>
                             <div>
-                                <label for="resourceUri">Resource URI (RFC 8707)</label>
+                                <label for="resourceUri">Resource Parameter (RFC 8707)</label>
                                 <input
                                     type="url"
                                     id="resourceUri"
                                     name="resourceUri"
                                     placeholder="https://api.example.com"
                                 >
-                                <small>Optional: Test resource indicators extension</small>
+                                <small>Resource server URL (REQUIRED for MCP 2025-11-25). Used in authorization/token requests and validated in JWT aud claim.</small>
+                            </div>
+                            <div>
+                                <label for="privilegedToolName">Privileged Tool Name (Optional - for Step-Up Auth Test)</label>
+                                <input
+                                    type="text"
+                                    id="privilegedToolName"
+                                    name="privilegedToolName"
+                                    placeholder="e.g., admin_tool"
+                                >
+                                <small>Optional: Tool requiring elevated scope for testing scope challenge handling (test step-1.5). Tool should return 403 with scope challenge when accessed with base token.</small>
                             </div>
                         </div>
                     </div>
@@ -566,8 +780,8 @@
                             <span class="toggle-slider"></span>
                         </label>
                         <div class="option-title">
-                            <h3>Use Pre-Configured Client</h3>
-                            <p>Provide your own client_id instead of using DCR</p>
+                            <h3>Use Pre-Configured Client (Preregistration)</h3>
+                            <p>Priority #1: Use existing client credentials (bypasses Client ID Metadata and DCR)</p>
                         </div>
                     </div>
                     <div class="option-content" id="preConfiguredClientOptions">
@@ -614,6 +828,48 @@
                     </div>
                 </div>
 
+                <!-- Client ID Metadata Document (MCP 2025-11-25) -->
+                <div class="option-section" data-option="useClientIDMetadata" data-content="clientIDMetadataOptions">
+                    <div class="option-header">
+                        <label class="toggle-switch" onclick="event.stopPropagation()">
+                            <input type="checkbox" id="useClientIDMetadata" name="useClientIDMetadata">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="option-title">
+                            <h3>Client ID Metadata Document (MCP 2025-11-25)</h3>
+                            <p>Priority #2: Use HTTPS URL as client_id (falls back to DCR if unavailable)</p>
+                        </div>
+                    </div>
+                    <div class="option-content" id="clientIDMetadataOptions">
+                        <div class="option-fields">
+                            <div>
+                                <label for="clientIDMetadataUrl">Client ID Metadata URL <span style="color: #e74c3c;">*</span></label>
+                                <input
+                                    type="url"
+                                    id="clientIDMetadataUrl"
+                                    name="clientIDMetadataUrl"
+                                    placeholder="https://client.example.com/metadata"
+                                >
+                                <small>HTTPS URL that resolves to a JSON metadata document containing client_id, redirect_uris, etc.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Allow HTTP MCP Connection -->
+                <div class="option-section" data-option="allowHttpMcpConnection">
+                    <div class="option-header">
+                        <label class="toggle-switch" onclick="event.stopPropagation()">
+                            <input type="checkbox" id="allowHttpMcpConnection" name="allowHttpMcpConnection">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="option-title">
+                            <h3>Allow HTTP MCP Connection</h3>
+                            <p>Enable authenticated HTTP connections to non-localhost MCP servers (localhost always allowed - HTTPS recommended for production)</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Enable Debug Mode -->
                 <div class="option-section" data-option="enableDebug">
                     <div class="option-header">
@@ -635,19 +891,37 @@
                     Run Compliance Tests
                 </button>
             </form>
-        </div>
+                </div>
+            </div>
 
-        <div class="card loading" id="loadingSection" style="display: none;">
-            <div class="spinner"></div>
-            <p>Running compliance tests... This may take up to 30 seconds.</p>
-        </div>
+            <!-- Results Column -->
+            <div class="results-column">
+                <div class="card loading" id="loadingSection" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Running compliance tests... This may take up to 30 seconds.</p>
+                </div>
 
-        <div class="card results" id="resultsSection">
-            <h2 style="margin-bottom: 20px;">Test Results</h2>
-
-            <div class="summary" id="summary"></div>
+                <div class="card results" id="resultsSection">
+            <div class="summary" id="summary">
+                <div style="grid-column: 1 / -1; text-align: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; color: #8892f0;">Test Results Summary</h2>
+                </div>
+            </div>
 
             <div id="testResults"></div>
+                </div>
+            </div>
+
+            <!-- OAuth Flow Readiness Overview Column -->
+            <div class="overview-column" id="overviewColumn" style="display: none;">
+                <div class="card">
+                    <h2 style="margin: 0 0 15px 0; color: #8892f0; font-size: 1.3em;">OAuth Flow Readiness</h2>
+                    <p style="font-size: 0.85em; color: #b0b0b0; margin-bottom: 20px; line-height: 1.5;">
+                        Summary of whether each section provides sufficient information for a compliant client to complete OAuth authentication.
+                    </p>
+                    <div id="oauthOverview"></div>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
@@ -699,6 +973,21 @@
             });
         });
 
+        // Handle protocol version change - show/hide options based on selected protocol
+        function updateOptionsForProtocol() {
+            // Always use MCP 2025-11-25 protocol - show all registration options
+            const preConfigSection = document.querySelector('[data-option="usePreConfiguredClient"]');
+            const clientIdMetadataSection = document.querySelector('[data-option="useClientIDMetadata"]');
+            const skipDCRDesc = document.getElementById('skipDCRDescription');
+
+            preConfigSection.style.display = 'block';
+            clientIdMetadataSection.style.display = 'block';
+            skipDCRDesc.textContent = 'Bypass all client registration methods (Preregistration, Client ID Metadata, and DCR)';
+        }
+
+        // Initialize on page load
+        updateOptionsForProtocol();
+
         // Auto-enable interactive auth when pre-configured client is selected
         document.getElementById('usePreConfiguredClient').addEventListener('change', (e) => {
             if (e.target.checked) {
@@ -714,21 +1003,28 @@
             e.preventDefault();
 
             const serverUrl = document.getElementById('serverUrl').value;
+            const protocolVersion = document.getElementById('protocolVersion').value;
             const skipDCR = document.getElementById('skipDCR').checked;
             const skipOAuthFlow = document.getElementById('skipOAuth').checked;
             const interactiveAuth = document.getElementById('interactiveAuth').checked;
             const usePreConfiguredClient = document.getElementById('usePreConfiguredClient').checked;
+            const useClientIDMetadata = document.getElementById('useClientIDMetadata').checked;
             const enableDebug = document.getElementById('enableDebug').checked;
+            const allowHttpMcpConnection = document.getElementById('allowHttpMcpConnection').checked;
             const callbackPort = document.getElementById('callbackPort').value;
             const resourceUri = document.getElementById('resourceUri').value;
+            const privilegedToolName = document.getElementById('privilegedToolName').value;
 
             const config = {
                 serverUrl,
+                protocolVersion,
                 skipDCR,
                 skipOAuthFlow,
                 interactiveAuth,
                 usePreConfiguredClient,
+                useClientIDMetadata,
                 enableDebug,
+                allowHttpMcpConnection,
                 timeout: 30000
             };
 
@@ -738,6 +1034,21 @@
             }
             if (resourceUri) {
                 config.resourceUri = resourceUri;
+            }
+            if (privilegedToolName) {
+                config.privilegedToolName = privilegedToolName;
+            }
+
+            // Add Client ID Metadata Document parameters (MCP 2025-11-25)
+            if (useClientIDMetadata) {
+                const clientIDMetadataUrl = document.getElementById('clientIDMetadataUrl').value;
+
+                if (!clientIDMetadataUrl) {
+                    alert('Client ID Metadata Document mode requires a metadata URL');
+                    return;
+                }
+
+                config.clientIDMetadataUrl = clientIDMetadataUrl;
             }
 
             // Add pre-configured client parameters
@@ -793,32 +1104,94 @@
             }
         });
 
+        // LocalStorage key for collapsed categories
+        const COLLAPSED_CATEGORIES_KEY = 'mcp-compliance-collapsed-categories';
+
+        // Get a consistent ID for a category name
+        function getCategoryId(categoryName) {
+            return categoryName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+        }
+
+        // Get collapsed categories from localStorage
+        function getCollapsedCategories() {
+            try {
+                const stored = localStorage.getItem(COLLAPSED_CATEGORIES_KEY);
+                return stored ? JSON.parse(stored) : {};
+            } catch (e) {
+                console.error('Error reading collapsed categories from localStorage:', e);
+                return {};
+            }
+        }
+
+        // Save collapsed categories to localStorage
+        function saveCollapsedCategories(collapsed) {
+            try {
+                localStorage.setItem(COLLAPSED_CATEGORIES_KEY, JSON.stringify(collapsed));
+            } catch (e) {
+                console.error('Error saving collapsed categories to localStorage:', e);
+            }
+        }
+
+        // Check if a category is collapsed
+        function isCategoryCollapsed(categoryId) {
+            const collapsed = getCollapsedCategories();
+            return collapsed[categoryId] === true;
+        }
+
+        // Toggle category collapse state
+        function toggleCategory(categoryId, contentDiv, arrowDiv) {
+            const collapsed = getCollapsedCategories();
+            const isCurrentlyCollapsed = contentDiv.classList.contains('collapsed');
+
+            if (isCurrentlyCollapsed) {
+                // Expand
+                contentDiv.classList.remove('collapsed');
+                arrowDiv.classList.remove('collapsed');
+                collapsed[categoryId] = false;
+            } else {
+                // Collapse
+                contentDiv.classList.add('collapsed');
+                arrowDiv.classList.add('collapsed');
+                collapsed[categoryId] = true;
+            }
+
+            saveCollapsedCategories(collapsed);
+        }
+
         function displayResults(suite) {
             const summaryDiv = document.getElementById('summary');
             const resultsDiv = document.getElementById('testResults');
 
-            // Calculate warnings count
+            // Calculate warnings and info counts
             const warningsCount = suite.results.filter(r => r.status === 'warning').length;
+            const infoCount = suite.results.filter(r => r.status === 'info').length;
 
             // Display summary
             summaryDiv.innerHTML = `
-                <div class="summary-card passed">
+                <div style="grid-column: 1 / -1; text-align: center; margin-bottom: 10px;">
+                    <h2 style="margin: 0; color: #8892f0;">Test Results Summary</h2>
+                </div>
+                <div class="summary-card passed" data-filter="pass">
                     <div class="number">${suite.summary.passed}</div>
                     <div class="label">Passed</div>
                 </div>
-                <div class="summary-card failed">
+                <div class="summary-card failed" data-filter="fail">
                     <div class="number">${suite.summary.failed}</div>
                     <div class="label">Failed</div>
                 </div>
-                <div class="summary-card warnings">
+                <div class="summary-card warnings" data-filter="warning">
                     <div class="number">${warningsCount}</div>
                     <div class="label">Warnings</div>
                 </div>
-                <div class="summary-card skipped">
+                <div class="summary-card info" data-filter="info">
+                    <div class="number">${infoCount}</div>
+                    <div class="label">Info</div>
+                </div>
+                <div class="summary-card skipped" data-filter="skip">
                     <div class="number">${suite.summary.skipped}</div>
                     <div class="label">Skipped</div>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card" data-filter="all">
                     <div class="number">${suite.summary.total}</div>
                     <div class="label">Total</div>
                 </div>
@@ -838,11 +1211,28 @@
             Object.entries(categories).forEach(([category, results]) => {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'category';
+                const categoryId = getCategoryId(category);
+                categoryDiv.dataset.categoryId = categoryId;
+
+                // Create category header with collapse/expand
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'category-header';
+
+                const arrowDiv = document.createElement('div');
+                arrowDiv.className = 'category-arrow';
+                arrowDiv.textContent = '▼';
 
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'category-title';
                 titleDiv.textContent = category;
-                categoryDiv.appendChild(titleDiv);
+
+                headerDiv.appendChild(arrowDiv);
+                headerDiv.appendChild(titleDiv);
+                categoryDiv.appendChild(headerDiv);
+
+                // Create category content container
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'category-content';
 
                 results.forEach(result => {
                     const resultDiv = document.createElement('div');
@@ -855,7 +1245,8 @@
 
                     const icon = result.status === 'pass' ? '✓' :
                                 result.status === 'fail' ? '✗' :
-                                result.status === 'warning' ? '⚠' : '⊘';
+                                result.status === 'warning' ? '⊘' :
+                                result.status === 'info' ? 'ℹ' : '○';
 
                     let html = `
                         <div class="test-icon ${result.status}">${icon}</div>
@@ -894,8 +1285,10 @@
                                 <div class="test-details" style="white-space: pre-wrap;">${escapeHtml(result.remediation)}</div>
                             </details>`;
                         }
+                    }
 
-                        // Rerun button
+                    // Add rerun button for fail and warning tests only
+                    if (result.id && (result.status === 'fail' || result.status === 'warning')) {
                         html += `<button class="rerun-btn" data-test-id="${result.id}" style="margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">
                             🔄 Rerun Test
                         </button>`;
@@ -926,8 +1319,21 @@
 
                     html += '</div>';
                     resultDiv.innerHTML = html;
-                    categoryDiv.appendChild(resultDiv);
+                    contentDiv.appendChild(resultDiv);
                 });
+
+                categoryDiv.appendChild(contentDiv);
+
+                // Add click handler for collapse/expand
+                headerDiv.addEventListener('click', () => {
+                    toggleCategory(categoryId, contentDiv, arrowDiv);
+                });
+
+                // Restore collapsed state from localStorage
+                if (isCategoryCollapsed(categoryId)) {
+                    contentDiv.classList.add('collapsed');
+                    arrowDiv.classList.add('collapsed');
+                }
 
                 resultsDiv.appendChild(categoryDiv);
             });
@@ -942,15 +1348,279 @@
                     await rerunTest(testId, suite.serverUrl);
                 });
             });
+
+            // Add event listeners for summary card filtering
+            document.querySelectorAll('.summary-card[data-filter]').forEach(card => {
+                card.addEventListener('click', () => {
+                    const filterStatus = card.getAttribute('data-filter');
+                    filterResults(filterStatus);
+
+                    // Update active state
+                    document.querySelectorAll('.summary-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                });
+            });
+
+            // Generate OAuth flow readiness overview
+            displayOAuthOverview(suite.results);
+        }
+
+        function displayOAuthOverview(results) {
+            const overviewDiv = document.getElementById('oauthOverview');
+            const overviewColumn = document.getElementById('overviewColumn');
+
+            // Show the overview column
+            overviewColumn.style.display = 'block';
+
+            // Define key sections and their requirements for OAuth flow
+            const sections = [
+                {
+                    title: 'Server Discovery',
+                    description: 'MCP server advertises authorization server',
+                    requirements: [
+                        { test: 'prm-1.8', label: 'Authorization server URL available', required: true },
+                        { test: 'prm-1.7', label: 'Protected resource metadata accessible', required: false }
+                    ]
+                },
+                {
+                    title: 'AS Metadata',
+                    description: 'Authorization server provides required metadata',
+                    requirements: [
+                        { test: 'as-2.1', label: 'AS metadata endpoint accessible', required: true },
+                        { test: 'as-2.3', label: 'Authorization endpoint available', required: true },
+                        { test: 'as-2.4', label: 'Token endpoint available', required: true },
+                        { test: 'oauth-4.1', label: 'Authorization code grant supported', required: true }
+                    ]
+                },
+                {
+                    title: 'Client Registration',
+                    description: 'Client can register with authorization server',
+                    requirements: [
+                        { test: 'client-reg-1.1', label: 'Preregistration works', required: false },
+                        { test: 'client-reg-2.1', label: 'Client ID metadata supported', required: false },
+                        { test: 'client-reg-3.1', label: 'DCR endpoint available', required: false },
+                        { test: 'client-reg-3.2', label: 'Client registered successfully', required: true }
+                    ]
+                },
+                {
+                    title: 'Authorization Flow',
+                    description: 'OAuth authorization code flow completes',
+                    requirements: [
+                        { test: 'oauth-4.1', label: 'Authorization URL constructed', required: true },
+                        { test: 'oauth-4.2', label: 'Authorization code received', required: true },
+                        { test: 'oauth-4.3', label: 'Token exchange successful', required: true },
+                        { test: 'oauth-4.4', label: 'Access token received', required: true }
+                    ]
+                },
+                {
+                    title: 'PKCE Support',
+                    description: 'PKCE is supported for secure authorization flow',
+                    requirements: [
+                        { test: 'oauth-4.2', label: 'PKCE methods advertised', required: true },
+                        { test: 'pkce-3', label: 'S256 method supported (MCP 2025-11-25)', required: false },
+                        { test: 'pkce-4', label: 'Plain method available', required: false }
+                    ]
+                },
+                {
+                    title: 'Token Validation',
+                    description: 'Access token can be used for authentication',
+                    requirements: [
+                        { test: 'jwt-5.1', label: 'Token is valid JWT', required: true },
+                        { test: 'jwt-5.5', label: 'RFC 9068 claims present', required: false },
+                        { test: 'jwt-5.6', label: 'Token not expired', required: true }
+                    ]
+                },
+                {
+                    title: 'Server Access (End-to-End)',
+                    description: 'Client successfully authenticated and accessed MCP server',
+                    requirements: [
+                        { test: 'cap-10.1', label: 'Authenticated MCP connection established', required: true },
+                        { test: 'cap-10.2', label: 'Tools retrieved', required: false },
+                        { test: 'cap-10.3', label: 'Resources retrieved', required: false },
+                        { test: 'cap-10.4', label: 'Prompts retrieved', required: false }
+                    ]
+                }
+            ];
+
+            let html = '';
+
+            sections.forEach(section => {
+                const sectionResults = section.requirements.map(req => {
+                    // Find all results with this test ID
+                    const matchingResults = results.filter(r => r.id === req.test);
+
+                    // If multiple results exist, prefer non-info statuses (final results over intermediate ones)
+                    let result;
+                    if (matchingResults.length === 0) {
+                        result = null;
+                    } else if (matchingResults.length === 1) {
+                        result = matchingResults[0];
+                    } else {
+                        // Multiple results - prefer pass/fail/warning over info
+                        result = matchingResults.find(r => r.status !== 'info') || matchingResults[matchingResults.length - 1];
+                    }
+
+                    return {
+                        ...req,
+                        status: result ? result.status : 'unknown'
+                    };
+                });
+
+                // Determine overall section status
+                const requiredTests = sectionResults.filter(r => r.required);
+                const allRequiredPass = requiredTests.every(r => r.status === 'pass');
+                const anyRequiredFail = requiredTests.some(r => r.status === 'fail');
+                const optionalTests = sectionResults.filter(r => !r.required);
+                const someOptionalPass = optionalTests.some(r => r.status === 'pass');
+
+                let sectionStatus, statusIcon;
+                if (allRequiredPass && (optionalTests.length === 0 || someOptionalPass)) {
+                    sectionStatus = 'ready';
+                    statusIcon = '✓';
+                } else if (anyRequiredFail) {
+                    sectionStatus = 'not-ready';
+                    statusIcon = '✗';
+                } else if (allRequiredPass) {
+                    sectionStatus = 'partial';
+                    statusIcon = '⊘';
+                } else {
+                    sectionStatus = 'unknown';
+                    statusIcon = '?';
+                }
+
+                html += `
+                    <div class="overview-section">
+                        <div class="overview-section-header">
+                            <span class="overview-status-icon ${sectionStatus}">${statusIcon}</span>
+                            <div class="overview-section-title">${section.title}</div>
+                        </div>
+                        <div class="overview-section-description">${section.description}</div>
+                        <div class="overview-requirements">
+                `;
+
+                sectionResults.forEach(req => {
+                    const reqStatus = req.status === 'pass' ? 'met' :
+                                     req.status === 'fail' ? 'not-met' :
+                                     req.required ? 'not-met' : 'optional';
+                    const reqIcon = req.status === 'pass' ? '✓' :
+                                   req.status === 'fail' ? '✗' :
+                                   req.status === 'skip' ? '○' : '?';
+
+                    html += `
+                        <div class="overview-requirement ${reqStatus}">
+                            <span class="overview-requirement-icon">${reqIcon}</span>
+                            <span>${req.label}${req.required ? '' : ' (optional)'}</span>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            overviewDiv.innerHTML = html;
+        }
+
+        function filterResults(status) {
+            const allResults = document.querySelectorAll('.test-result');
+            const allCategories = document.querySelectorAll('.category');
+
+            if (status === 'all') {
+                // Show all results
+                allResults.forEach(result => {
+                    result.classList.remove('filtered-hidden');
+                });
+                allCategories.forEach(category => {
+                    category.style.display = 'block';
+                });
+            } else {
+                // Filter by status
+                allResults.forEach(result => {
+                    if (result.classList.contains(status)) {
+                        result.classList.remove('filtered-hidden');
+                    } else {
+                        result.classList.add('filtered-hidden');
+                    }
+                });
+
+                // Hide categories with no visible results
+                allCategories.forEach(category => {
+                    const visibleResults = category.querySelectorAll('.test-result:not(.filtered-hidden)');
+                    if (visibleResults.length === 0) {
+                        category.style.display = 'none';
+                    } else {
+                        category.style.display = 'block';
+                    }
+                });
+            }
         }
 
         async function rerunTest(testId, serverUrl) {
+            // Build complete config using current form values
+            const protocolVersion = document.getElementById('protocolVersion').value;
+            const skipDCR = document.getElementById('skipDCR').checked;
+            const skipOAuthFlow = document.getElementById('skipOAuth').checked;
+            const interactiveAuth = document.getElementById('interactiveAuth').checked;
+            const usePreConfiguredClient = document.getElementById('usePreConfiguredClient').checked;
+            const useClientIDMetadata = document.getElementById('useClientIDMetadata').checked;
+            const enableDebug = document.getElementById('enableDebug').checked;
+            const callbackPort = document.getElementById('callbackPort').value;
+            const resourceUri = document.getElementById('resourceUri').value;
+            const privilegedToolName = document.getElementById('privilegedToolName').value;
+
             const config = {
                 serverUrl,
-                skipDCR: document.getElementById('skipDCR').checked,
-                skipOAuthFlow: document.getElementById('skipOAuth').checked,
+                protocolVersion,
+                skipDCR,
+                skipOAuthFlow,
+                interactiveAuth,
+                usePreConfiguredClient,
+                useClientIDMetadata,
+                enableDebug,
                 timeout: 30000
             };
+
+            // Add optional parameters
+            if (callbackPort) {
+                config.callbackPort = parseInt(callbackPort);
+            }
+            if (resourceUri) {
+                config.resourceUri = resourceUri;
+            }
+            if (privilegedToolName) {
+                config.privilegedToolName = privilegedToolName;
+            }
+
+            // Add Client ID Metadata Document parameters (MCP 2025-11-25)
+            if (useClientIDMetadata) {
+                const clientIDMetadataUrl = document.getElementById('clientIDMetadataUrl').value;
+                if (clientIDMetadataUrl) {
+                    config.clientIDMetadataUrl = clientIDMetadataUrl;
+                }
+            }
+
+            // Add pre-configured client parameters
+            if (usePreConfiguredClient) {
+                const clientId = document.getElementById('clientId').value;
+                const clientSecret = document.getElementById('clientSecret').value;
+                const scope = document.getElementById('scope').value;
+                const redirectUri = document.getElementById('redirectUri').value;
+
+                if (clientId) {
+                    config.clientId = clientId;
+                }
+                if (clientSecret) {
+                    config.clientSecret = clientSecret;
+                }
+                if (scope) {
+                    config.scope = scope;
+                }
+                if (redirectUri) {
+                    config.redirectUri = redirectUri;
+                }
+            }
 
             const resultDiv = document.getElementById(`result-${testId}`);
             if (resultDiv) {
@@ -988,7 +1658,8 @@
 
                     const icon = result.status === 'pass' ? '✓' :
                                 result.status === 'fail' ? '✗' :
-                                result.status === 'warning' ? '⚠' : '⊘';
+                                result.status === 'warning' ? '⊘' :
+                                result.status === 'info' ? 'ℹ' : '○';
 
                     let html = `
                         <div class="test-icon ${result.status}">${icon}</div>
@@ -1022,6 +1693,10 @@
                                 <div class="test-details" style="white-space: pre-wrap;">${escapeHtml(result.remediation)}</div>
                             </details>`;
                         }
+                    }
+
+                    // Add rerun button for fail and warning tests only
+                    if (result.id && (result.status === 'fail' || result.status === 'warning')) {
                         html += `<button class="rerun-btn" data-test-id="${result.id}" style="margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">
                             🔄 Rerun Test
                         </button>`;

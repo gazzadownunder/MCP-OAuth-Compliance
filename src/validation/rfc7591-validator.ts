@@ -1,9 +1,16 @@
 import { ValidationResult, RegistrationResponse, ClientMetadata } from '../types/dcr.js';
+import { ProtocolVersion } from '../types/protocol-version.js';
 
 /**
  * Validates RFC 7591 compliance for client registration responses
+ * Enhanced with MCP 2025-11-25 protocol awareness
  */
 export class RFC7591Validator {
+  private protocolVersion: ProtocolVersion;
+
+  constructor(protocolVersion: ProtocolVersion = ProtocolVersion.PRE_2025_11_25) {
+    this.protocolVersion = protocolVersion;
+  }
   /**
    * Validate a registration response for RFC 7591 compliance
    */
@@ -132,7 +139,15 @@ export class RFC7591Validator {
       const jwtMethods = ['client_secret_jwt', 'private_key_jwt'];
       if (jwtMethods.includes(metadata.token_endpoint_auth_method)) {
         if (!metadata.jwks_uri && !metadata.jwks) {
-          warnings.push(`${metadata.token_endpoint_auth_method} requires jwks_uri or jwks`);
+          // For MCP 2025-11-25, this is an error for private_key_jwt
+          if (
+            this.protocolVersion === ProtocolVersion.MCP_2025_11_25 &&
+            metadata.token_endpoint_auth_method === 'private_key_jwt'
+          ) {
+            errors.push('private_key_jwt requires jwks_uri or jwks for MCP 2025-11-25');
+          } else {
+            warnings.push(`${metadata.token_endpoint_auth_method} requires jwks_uri or jwks`);
+          }
         }
       }
     }

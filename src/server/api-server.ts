@@ -132,7 +132,11 @@ export class ComplianceAPIServer {
         if (result) {
           res.json(result);
         } else {
-          res.status(404).json({ error: 'Test not found' });
+          res.status(404).json({
+            error: 'Test not found',
+            testId,
+            hint: 'The test may have failed to execute or the test ID may not exist in the current protocol version'
+          });
         }
       } catch (error) {
         console.error('Error rerunning test:', error);
@@ -183,16 +187,42 @@ export class ComplianceAPIServer {
   }
 
   async start(): Promise<void> {
-    return new Promise(resolve => {
-      this.app.listen(this.port, () => {
-        console.log(
-          `\n🚀 MCP Compliance Tester API Server running on http://localhost:${this.port}`
-        );
-        console.log(
-          `\n📊 Open http://localhost:${this.port} in your browser to use the compliance tester\n`
-        );
-        resolve();
-      });
+    return new Promise((resolve, reject) => {
+      const tryPort = (port: number, attempt: number = 0): void => {
+        if (attempt >= 20) {
+          reject(
+            new Error(
+              `All attempted ports (${this.port}-${this.port + 19}) are in use. Please close applications using these ports or specify a different port.`
+            )
+          );
+          return;
+        }
+
+        const server = this.app.listen(port, () => {
+          if (attempt > 0) {
+            console.log(`✅ Port ${this.port} was in use, using port ${port} instead`);
+          }
+          console.log(
+            `\n🚀 MCP Compliance Tester API Server running on http://localhost:${port}`
+          );
+          console.log(
+            `\n📊 Open http://localhost:${port} in your browser to use the compliance tester\n`
+          );
+          this.port = port; // Update the port to the actual port being used
+          resolve();
+        });
+
+        server.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE') {
+            console.log(`  Port ${port} is already in use, trying next port...`);
+            tryPort(this.port + attempt + 1, attempt + 1);
+          } else {
+            reject(err);
+          }
+        });
+      };
+
+      tryPort(this.port);
     });
   }
 

@@ -184,5 +184,65 @@ export const TEST_METADATA: Record<string, TestMetadata> = {
     expected: 'Token includes audience (aud) claim when resource parameter used',
     remediation:
       'When a client specifies the "resource" parameter in the authorization or token request, the resulting access token should be audience-restricted to that resource.\n\nThis is typically visible in the JWT token\'s "aud" claim.'
+  },
+
+  // Step-Up Authorization Tests (MCP 2025-11-25)
+  'step-1.0': {
+    rfcReference: 'MCP 2025-11-25 Section 10.1',
+    rfcUrl: 'https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#section-10.1',
+    expected: 'Server implements complete step-up authorization flow',
+    remediation:
+      'Server must support step-up authorization:\n\n1. Return 403 Forbidden for privileged resources when token has insufficient scope\n2. Include scope challenge in error response\n3. Accept re-authorization with elevated scopes\n4. Issue token with elevated scope\n5. Allow access with elevated token\n\nTest requires configuring a privileged tool that requires elevated scope.'
+  },
+  'step-1.0.1': {
+    rfcReference: 'RFC 6750 Section 3.1',
+    rfcUrl: 'https://www.rfc-editor.org/rfc/rfc6750.html#section-3.1',
+    expected: 'Server returns 403 Forbidden for insufficient scope',
+    remediation:
+      'Configure your server to:\n\n1. Check the access token scope claim\n2. Return HTTP 403 Forbidden if the required scope is missing\n3. Include error="insufficient_scope" in the response\n\nExample error response:\n{\n  "error": "insufficient_scope",\n  "error_description": "This tool requires the \'admin\' scope",\n  "scope": "admin"\n}'
+  },
+  'step-1.0.2': {
+    rfcReference: 'MCP 2025-11-25 Section 10.1',
+    rfcUrl: 'https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#section-10.1',
+    expected: 'Server includes scope information in 403 error response',
+    remediation:
+      'When returning 403 for insufficient scope, include the required scope in one of these ways:\n\n**Method 1**: Include "scope" field in error response body\n{\n  "error": "insufficient_scope",\n  "scope": "admin"\n}\n\n**Method 2**: Include scope in error_description\n{\n  "error": "insufficient_scope",\n  "error_description": "Requires scope: admin"\n}\n\n**Method 3**: Use WWW-Authenticate header\nWWW-Authenticate: Bearer error="insufficient_scope", scope="admin"'
+  },
+  'step-1.0.8': {
+    rfcReference: 'MCP 2025-11-25 Section 10.1',
+    rfcUrl: 'https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#section-10.1',
+    expected: 'Server allows access when token contains required elevated scope',
+    remediation:
+      'After client re-authorizes with elevated scope:\n\n1. Verify the access token now contains the elevated scope in its scope claim\n2. Allow the request to proceed successfully\n3. Return the expected response (200 OK)\n\nExample token scope claim after re-authorization:\n{\n  "scope": "basic admin",  // Now includes both base and elevated scopes\n  "aud": "https://mcp-server.example.com",\n  "iss": "https://as.example.com"\n}'
+  },
+
+  // Server Capabilities Discovery Tests
+  'cap-10.1': {
+    rfcReference: 'MCP Specification - Server Capabilities',
+    rfcUrl: 'https://spec.modelcontextprotocol.io/specification/2025-11-25/server/capabilities/',
+    expected: 'Successfully initialize authenticated MCP client connection',
+    remediation:
+      'Ensure your MCP server:\n\n1. Accepts connections with valid OAuth access tokens\n2. Validates the access token before allowing discovery operations\n3. Returns appropriate errors for invalid or expired tokens'
+  },
+  'cap-10.2': {
+    rfcReference: 'MCP Specification - Tools',
+    rfcUrl: 'https://spec.modelcontextprotocol.io/specification/2025-11-25/server/tools/',
+    expected: 'Server returns list of available tools via tools/list',
+    remediation:
+      'Implement the tools/list RPC method to return available tools:\n\n{\n  "tools": [\n    {\n      "name": "tool_name",\n      "description": "Tool description",\n      "inputSchema": { ... }\n    }\n  ]\n}\n\nEach tool should include:\n- name: Unique identifier\n- description: What the tool does\n- inputSchema: JSON Schema for tool parameters'
+  },
+  'cap-10.3': {
+    rfcReference: 'MCP Specification - Resources',
+    rfcUrl: 'https://spec.modelcontextprotocol.io/specification/2025-11-25/server/resources/',
+    expected: 'Server returns list of available resources via resources/list',
+    remediation:
+      'Implement the resources/list RPC method to return available resources:\n\n{\n  "resources": [\n    {\n      "name": "resource_name",\n      "description": "Resource description",\n      "uri": "resource://uri",\n      "mimeType": "application/json"\n    }\n  ]\n}\n\nEach resource should include:\n- name: Display name\n- description: What the resource provides\n- uri: Unique resource identifier\n- mimeType: Content type (optional)'
+  },
+  'cap-10.4': {
+    rfcReference: 'MCP Specification - Prompts',
+    rfcUrl: 'https://spec.modelcontextprotocol.io/specification/2025-11-25/server/prompts/',
+    expected: 'Server returns list of available prompts via prompts/list',
+    remediation:
+      'Implement the prompts/list RPC method to return available prompts:\n\n{\n  "prompts": [\n    {\n      "name": "prompt_name",\n      "description": "Prompt description",\n      "arguments": [\n        {\n          "name": "arg_name",\n          "description": "Argument description",\n          "required": true\n        }\n      ]\n    }\n  ]\n}\n\nEach prompt should include:\n- name: Unique identifier\n- description: What the prompt generates\n- arguments: List of accepted parameters (optional)'
   }
 };
