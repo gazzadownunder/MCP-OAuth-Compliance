@@ -40,7 +40,14 @@ export const AuthorizationServerMetadataSchema = z
     introspection_endpoint_auth_methods_supported: z.array(z.string()).optional(),
 
     // PKCE
-    code_challenge_methods_supported: z.array(z.string()).optional()
+    code_challenge_methods_supported: z.array(z.string()).optional(),
+
+    // MCP 2025-11-25 specific fields
+    /**
+     * Indicates whether the server supports Client ID Metadata Documents
+     * @see MCP 2025-11-25 Authorization Specification
+     */
+    client_id_metadata_document_supported: z.boolean().optional()
   })
   .passthrough(); // Allow additional fields
 

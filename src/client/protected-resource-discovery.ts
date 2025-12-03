@@ -3,6 +3,7 @@ import {
   ProtectedResourceMetadataSchema,
   parseWWWAuthenticateHeader
 } from '../types/protected-resource-metadata.js';
+import { fetchWithDebug } from '../utils/fetch-with-debug.js';
 
 /**
  * OAuth 2.0 Protected Resource Metadata Discovery Client
@@ -82,7 +83,7 @@ export class ProtectedResourceDiscoveryClient {
    */
   private async discoverViaWWWAuthenticate(): Promise<ProtectedResourceMetadata | null> {
     // Make a request to the server to trigger 401 with WWW-Authenticate header
-    const response = await fetch(this.serverUrl, {
+    const response = await fetchWithDebug(this.serverUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -123,11 +124,12 @@ export class ProtectedResourceDiscoveryClient {
    * Fetch and validate metadata from a URL
    */
   private async fetchMetadata(url: string): Promise<ProtectedResourceMetadata> {
-    const response = await fetch(url, {
+    const response = await fetchWithDebug(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json'
-      }
+      },
+      debugLabel: 'Protected Resource Metadata'
     });
 
     if (!response.ok) {

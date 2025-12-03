@@ -26,51 +26,74 @@ export interface CallbackServerHandle {
  */
 export async function startCallbackServer(
   port: number,
-  serverUrl?: string
+  serverUrl?: string,
+  additionalUrlsToAvoid?: string[]
 ): Promise<CallbackServerHandle & { actualPort: number }> {
-  // Extract port from server URL if provided
-  let serverPort: number | undefined;
+  // Extract ports from URLs to avoid
+  const portsToAvoid = new Set<number>();
+
+  // Add main server port
   if (serverUrl) {
     try {
       const url = new URL(serverUrl);
-      if (url.port) {
-        serverPort = parseInt(url.port);
-      } else {
-        // Default ports for HTTP/HTTPS
-        serverPort = url.protocol === 'https:' ? 443 : 80;
-      }
-    } catch {
-      // Invalid URL, ignore
+      const serverPort = url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80);
+      portsToAvoid.add(serverPort);
+      console.log(`  Will avoid MCP server port: ${serverPort} (from ${serverUrl})`);
+    } catch (err) {
+      console.warn(`  Failed to parse server URL: ${serverUrl}`);
     }
+  }
+
+  // Add additional ports to avoid
+  if (additionalUrlsToAvoid) {
+    for (const urlStr of additionalUrlsToAvoid) {
+      try {
+        const url = new URL(urlStr);
+        const portToAvoid = url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80);
+        portsToAvoid.add(portToAvoid);
+        console.log(`  Will avoid authorization server port: ${portToAvoid} (from ${urlStr})`);
+      } catch (err) {
+        console.warn(`  Failed to parse URL: ${urlStr}`);
+      }
+    }
+  }
+
+  if (portsToAvoid.size > 0) {
+    console.log(`  Ports to avoid: ${Array.from(portsToAvoid).join(', ')}`);
   }
 
   // Try up to 20 ports starting from the requested port (increased from 10 to account for skipped ports)
   for (let attempt = 0; attempt < 20; attempt++) {
     const tryPort = port + attempt;
 
-    // Skip if this is the server's port
-    if (serverPort && tryPort === serverPort) {
-      console.log(`⏭️  Skipping port ${tryPort} (server under test is using this port)`);
+    // Skip if this port should be avoided
+    if (portsToAvoid.has(tryPort)) {
+      console.log(`⏭️  Skipping port ${tryPort} (in use by server under test)`);
       continue;
     }
 
+    console.log(`  Trying port ${tryPort}...`);
     try {
       const handle = await tryPort_Internal(tryPort);
       if (attempt > 0) {
-        console.log(`⚠️  Port ${port} was in use, using port ${tryPort} instead`);
+        console.log(`✅ Port ${port} was in use, using port ${tryPort} instead`);
+      } else {
+        console.log(`✅ Callback server started on port ${tryPort}`);
       }
       return { ...handle, actualPort: tryPort };
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
       // If it's not EADDRINUSE, throw immediately
       if (error.code !== 'EADDRINUSE') {
+        console.error(`❌ Error starting callback server on port ${tryPort}: ${error.message}`);
         throw err;
       }
+      console.log(`  Port ${tryPort} is already in use, trying next port...`);
       // If this was the last attempt, throw
       if (attempt === 19) {
         const endPort = port + 19;
-        const portRange = serverPort
-          ? `${port}-${endPort} (excluding server port ${serverPort})`
+        const portRange = portsToAvoid.size > 0
+          ? `${port}-${endPort} (excluding ports ${Array.from(portsToAvoid).join(', ')})`
           : `${port}-${endPort}`;
         throw new Error(
           `All attempted ports (${portRange}) are in use. Please close applications using these ports or specify a different callback port.`
@@ -183,15 +206,7 @@ function tryPort_Internal(port: number): Promise<CallbackServerHandle> {
 
     // Handle server errors (e.g., port in use)
     server.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE') {
-        rejectStart(
-          new Error(
-            `Port ${port} is already in use. Please choose a different callback port or close the application using it.`
-          )
-        );
-      } else {
-        rejectStart(err);
-      }
+      rejectStart(err);
     });
 
     // Start listening

@@ -9,7 +9,9 @@ import {
   ErrorResponseSchema
 } from '../types/dcr.js';
 import { DiscoveryClient } from './discovery.js';
-import { ProtectedResourceDiscoveryClient } from './protected-resource-discovery.js';
+import { ProtocolVersion } from '../types/protocol-version.js';
+import { ClientIDMetadataHandler } from './client-id-metadata-handler.js';
+import { AuthorizationServerMetadata } from '../types/oauth-discovery.js';
 
 export type TransportType = 'stdio' | 'http';
 
@@ -26,6 +28,9 @@ export interface DCRClientConfig {
 
   // Initial access token for registration
   initialAccessToken?: string;
+
+  // Protocol version (NEW)
+  protocolVersion?: ProtocolVersion;
 }
 
 export class DCRClient {
@@ -37,9 +42,18 @@ export class DCRClient {
   private discoveredRegistrationEndpoint?: string;
   private discoveredAuthorizationEndpoint?: string;
   private discoveredTokenEndpoint?: string;
+  private protocolVersion: ProtocolVersion;
+  private clientIDMetadataHandler?: ClientIDMetadataHandler;
+  private authServerMetadata?: AuthorizationServerMetadata;
 
   constructor(config: DCRClientConfig) {
     this.config = config;
+    this.protocolVersion = config.protocolVersion || ProtocolVersion.PRE_2025_11_25;
+
+    // Initialize Client ID Metadata handler for MCP 2025-11-25
+    if (this.protocolVersion === ProtocolVersion.MCP_2025_11_25) {
+      this.clientIDMetadataHandler = new ClientIDMetadataHandler();
+    }
 
     // Only create MCP client for stdio transport
     if (config.transportType === 'stdio') {
@@ -59,22 +73,14 @@ export class DCRClient {
    * Connect to the MCP server and discover OAuth endpoints
    */
   async connect(): Promise<void> {
-    // Step 1: Discover Authorization Server from MCP server (RFC 9728)
+    // Step 1: For HTTP transport, serverUrl IS the authorization server
+    // (already discovered by compliance-tester.ts)
     if (this.config.transportType === 'http' && this.config.serverUrl) {
-      console.log('Discovering authorization server from MCP server (RFC 9728)...');
-      try {
-        const protectedResourceClient = new ProtectedResourceDiscoveryClient(this.config.serverUrl);
-        this.authorizationServer = await protectedResourceClient.getAuthorizationServer();
-        console.log('Discovered authorization server:', this.authorizationServer);
+      console.log('Using authorization server:', this.config.serverUrl);
+      this.authorizationServer = this.config.serverUrl;
 
-        // Initialize OAuth discovery client with discovered issuer
-        this.discoveryClient = new DiscoveryClient(this.authorizationServer);
-      } catch (error) {
-        console.warn(
-          `Protected Resource Metadata discovery failed: ${error instanceof Error ? error.message : String(error)}`
-        );
-        console.warn('Unable to discover authorization server from MCP server');
-      }
+      // Initialize OAuth discovery client with the authorization server
+      this.discoveryClient = new DiscoveryClient(this.authorizationServer);
     }
 
     // Step 2: Perform OAuth Discovery to get registration endpoint (RFC 8414)
@@ -83,6 +89,9 @@ export class DCRClient {
       try {
         const endpoints = await this.discoveryClient.getEndpoints();
         console.log('Discovered endpoints:', endpoints);
+
+        // Store full metadata for protocol version checks
+        this.authServerMetadata = await this.discoveryClient.getMetadata();
 
         if (endpoints.registration) {
           this.discoveredRegistrationEndpoint = endpoints.registration;
@@ -97,6 +106,11 @@ export class DCRClient {
 
         if (endpoints.token) {
           this.discoveredTokenEndpoint = endpoints.token;
+        }
+
+        // Check protocol-specific features (MCP 2025-11-25)
+        if (this.protocolVersion === ProtocolVersion.MCP_2025_11_25) {
+          this.validateMCP2025Support();
         }
       } catch (error) {
         console.warn(
@@ -205,9 +219,12 @@ export class DCRClient {
     // Remove token from request body - it goes in the header
     delete (request as any).token;
 
+    let response: Response | undefined;
+    let responseBody: any;
+
     try {
       // RFC 7591: POST to registration endpoint with optional initial access token in Authorization header
-      const response = await fetch(registrationEndpoint, {
+      response = await fetch(registrationEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -220,17 +237,67 @@ export class DCRClient {
       });
 
       if (!response.ok) {
+        // Read response body once (can't clone after reading)
+        let errorBody: any;
+        const responseText = await response.text();
+
+        try {
+          errorBody = JSON.parse(responseText);
+        } catch {
+          errorBody = responseText;
+        }
+
         // Try to parse as RFC 7591 error response
         try {
-          const errorBody = await response.json();
           const errorResponse = ErrorResponseSchema.parse(errorBody);
-          throw new DCRError(errorResponse.error, errorResponse.error_description);
+          const dcrError = new DCRError(errorResponse.error, errorResponse.error_description);
+          // Attach debug info
+          (dcrError as any).debugInfo = {
+            request: {
+              method: 'POST',
+              url: registrationEndpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: this.config.initialAccessToken ? 'Bearer ***' : undefined
+              },
+              body: request
+            },
+            response: {
+              status: response.status,
+              statusText: response.statusText,
+              headers: Object.fromEntries(response.headers.entries()),
+              body: errorBody
+            }
+          };
+          throw dcrError;
         } catch (parseError) {
-          throw new Error(`Registration failed: ${response.status} ${response.statusText}`);
+          const error = new Error(
+            `Registration failed: ${response.status} ${response.statusText}`
+          );
+          (error as any).debugInfo = {
+            request: {
+              method: 'POST',
+              url: registrationEndpoint,
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: this.config.initialAccessToken ? 'Bearer ***' : undefined
+              },
+              body: request
+            },
+            response: {
+              status: response.status,
+              statusText: response.statusText,
+              headers: Object.fromEntries(response.headers.entries()),
+              body: errorBody
+            }
+          };
+          throw error;
         }
       }
 
-      const responseBody = await response.json();
+      responseBody = await response.json();
 
       // Validate response against RFC 7591
       const validatedResponse = RegistrationResponseSchema.parse(responseBody);
@@ -240,6 +307,34 @@ export class DCRClient {
       if (error instanceof DCRError) {
         throw error;
       }
+
+      // Enhance validation errors with debug info
+      if (error instanceof Error && error.name === 'ZodError') {
+        const enhancedError = new Error(`Validation failed: ${error.message}`);
+        (enhancedError as any).validationErrors = error;
+        (enhancedError as any).debugInfo = {
+          request: {
+            method: 'POST',
+            url: registrationEndpoint,
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              Authorization: this.config.initialAccessToken ? 'Bearer ***' : undefined
+            },
+            body: request
+          },
+          response: response
+            ? {
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries()),
+                body: responseBody
+              }
+            : undefined
+        };
+        throw enhancedError;
+      }
+
       throw error;
     }
   }
@@ -329,6 +424,7 @@ export class DCRClient {
     version: string;
     url?: string;
     authorizationServer?: string;
+    protocolVersion?: ProtocolVersion;
   }> {
     if (this.config.transportType === 'stdio') {
       if (!this.client) {
@@ -337,7 +433,8 @@ export class DCRClient {
       const serverVersion = await this.client.getServerVersion();
       return {
         name: serverVersion?.name || 'MCP Server',
-        version: serverVersion?.version || 'unknown'
+        version: serverVersion?.version || 'unknown',
+        protocolVersion: this.protocolVersion
       };
     } else if (this.config.transportType === 'http') {
       // Return basic info for HTTP transport
@@ -345,11 +442,66 @@ export class DCRClient {
         name: 'Remote MCP Server',
         version: 'unknown',
         url: this.config.serverUrl,
-        authorizationServer: this.authorizationServer
+        authorizationServer: this.authorizationServer,
+        protocolVersion: this.protocolVersion
       };
     }
 
     throw new Error('Invalid transport type');
+  }
+
+  /**
+   * Get protocol version
+   */
+  getProtocolVersion(): ProtocolVersion {
+    return this.protocolVersion;
+  }
+
+  /**
+   * Get authorization server metadata
+   */
+  getAuthServerMetadata(): AuthorizationServerMetadata | undefined {
+    return this.authServerMetadata;
+  }
+
+  /**
+   * Get Client ID Metadata handler (MCP 2025-11-25 only)
+   */
+  getClientIDMetadataHandler(): ClientIDMetadataHandler | undefined {
+    return this.clientIDMetadataHandler;
+  }
+
+  /**
+   * Validate MCP 2025-11-25 support in authorization server
+   * @private
+   */
+  private validateMCP2025Support(): void {
+    if (!this.authServerMetadata) {
+      console.warn('Cannot validate MCP 2025-11-25 support: metadata not available');
+      return;
+    }
+
+    const warnings: string[] = [];
+
+    // Check S256 PKCE support
+    const pkceMethods = this.authServerMetadata.code_challenge_methods_supported || [];
+    if (!pkceMethods.includes('S256')) {
+      warnings.push('S256 PKCE is required for MCP 2025-11-25 but not advertised');
+    }
+
+    // Check Client ID Metadata Document support
+    if (!this.authServerMetadata.client_id_metadata_document_supported) {
+      warnings.push(
+        'client_id_metadata_document_supported is not advertised. ' +
+        'Client ID Metadata Documents may not be supported.'
+      );
+    }
+
+    // Log warnings
+    if (warnings.length > 0) {
+      console.warn('\n⚠️  MCP 2025-11-25 Compatibility Warnings:');
+      warnings.forEach(w => console.warn(`  - ${w}`));
+    }
   }
 }
 

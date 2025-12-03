@@ -88,7 +88,9 @@ export const RegistrationResponseSchema = ClientMetadataSchema.extend({
   client_secret_expires_at: z.number().int().optional(),
 
   // Registration management
-  registration_client_uri: z.string().url().optional(),
+  // NOTE: RFC 7592 requires fully qualified URL, but some servers return relative paths
+  // Accept string to allow validation, actual URL validation happens in compliance tests
+  registration_client_uri: z.string().optional(),
   registration_access_token: z.string().optional()
 });
 

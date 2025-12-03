@@ -1,6 +1,7 @@
 # MCP Authorization Flow Compliance Tester
 
-A web-based tool to test MCP server compliance with the OAuth 2.1 authorization flow, including:
+A web-based tool to test MCP server compliance with the **MCP 2025-11-25 specification** and OAuth 2.1 authorization flow, including:
+- **MCP 2025-11-25**: Model Context Protocol Authorization (latest specification)
 - **RFC 9728**: OAuth 2.0 Protected Resource Metadata
 - **RFC 8414**: OAuth 2.0 Authorization Server Metadata
 - **RFC 7591**: OAuth 2.0 Dynamic Client Registration
@@ -11,6 +12,12 @@ A web-based tool to test MCP server compliance with the OAuth 2.1 authorization 
 - **RFC 7519**: JSON Web Token (JWT)
 - **RFC 7515**: JSON Web Signature (JWS)
 
+**Protocol Version**: Tests against **MCP 2025-11-25** by default, with backward compatibility for pre-2025-11-25 implementations.
+
+![MCP OAuth Compliance Tester Screenshot](/docs/screenshot.png)
+
+*Interactive web interface with detailed test results and OAuth Flow Readiness overview panel*
+
 ## Features
 
 - **Comprehensive Testing**: Tests all aspects of the MCP authorization flow
@@ -19,6 +26,8 @@ A web-based tool to test MCP server compliance with the OAuth 2.1 authorization 
 - **CORS Handling**: Backend proxy overcomes browser CORS restrictions
 - **Visual Results**: Clear pass/fail/warning indicators with detailed error messages
 - **Hierarchical Display**: Indented test results showing logical groupings
+- **Collapsible Test Sections**: Expand/collapse test categories organized by MCP specification sections
+- **Persistent UI State**: Section collapse/expand preferences saved between test runs using localStorage
 - **Interactive OAuth**: Complete browser-based authorization code flow testing
 - **Pre-Configured Client**: Option to bypass DCR with your own client_id
 
@@ -147,7 +156,31 @@ When enabled, additional fields appear:
 2. RFC 8414 standard: `{origin}/.well-known/oauth-authorization-server{path}`
 3. OIDC approach: `{issuer}/.well-known/oauth-authorization-server`
 
-### 3. Dynamic Client Registration (RFC 7591)
+### 3. Dynamic Client Registration (RFC 7591/7592)
+
+**MCP 2025-11-25 introduces unified client registration with priority order:**
+1. **Preregistration** (Priority #1) - Pre-configured client credentials
+2. **Client ID Metadata Document** (Priority #2) - HTTPS URL as client_id (MCP 2025-11-25 only)
+3. **Dynamic Client Registration** (Priority #3) - RFC 7591 fallback
+
+**Pre-2025-11-25 uses:**
+1. Preregistration
+2. Dynamic Client Registration
+
+| Test ID | Requirement | RFC Reference | Status |
+|---------|-------------|---------------|--------|
+| client-reg-1 | Preregistration (Priority #1) | N/A | OPTIONAL |
+| client-reg-1.1 | Client ID validation | N/A | REQUIRED (if configured) |
+| client-reg-1.2 | Redirect URI validation | N/A | RECOMMENDED (if configured) |
+| client-reg-2 | Client ID Metadata Document (Priority #2) | MCP 2025-11-25 | OPTIONAL (2025-11-25 only) |
+| client-reg-2.3 | Metadata document validation | MCP 2025-11-25 | REQUIRED (if used) |
+| client-reg-2.4 | client_id matches metadata URL | MCP 2025-11-25 | REQUIRED (if used) |
+| client-reg-3 | Dynamic Client Registration (Priority #3) | RFC 7591 §3 | OPTIONAL |
+| client-reg-3.1 | Registration endpoint discovery | RFC 8414 §2 | REQUIRED (if DCR supported) |
+| client-reg-3.2 | Client registration succeeds | RFC 7591 §3.2.1 | REQUIRED (if DCR supported) |
+| client-reg-3.2.1 | registration_client_uri is fully qualified URL | RFC 7592 §2 | REQUIRED (if RFC 7592 supported) |
+
+**Legacy Test IDs (deprecated, kept for backward compatibility):**
 
 | Test ID | Requirement | RFC Reference | Status |
 |---------|-------------|---------------|--------|
@@ -159,12 +192,23 @@ When enabled, additional fields appear:
 | dcr-3.5 | Supports PKCE (`token_endpoint_auth_method: "none"`) | RFC 7591 §2 | REQUIRED |
 
 **DCR Registration Fields Sent:**
-- `client_name`: "MCP Compliance Tester"
+- `client_name`: "MCP OAuth Compliance Tester"
 - `redirect_uris`: `["http://localhost:{callbackPort}/callback"]`
-- `grant_types`: `["authorization_code"]` (fallback adds `"refresh_token"`)
+- `grant_types`: `["authorization_code", "refresh_token"]`
 - `response_types`: `["code"]`
 - `token_endpoint_auth_method`: `"none"`
-- `scope`: Only included if explicitly configured by user
+- `scope`: Configured scope or "read write"
+
+**RFC 7592 Client Management Validation:**
+
+The tester validates `registration_client_uri` format per RFC 7592 Section 2:
+- ✅ **PASS**: Fully qualified URL (e.g., `https://server.com/register/client-id`)
+- ⚠️ **WARNING**: Relative URL (e.g., `/register/client-id`) - auto-corrected but server should fix this
+
+**Common Issue**: Some servers (e.g., Canva MCP) return relative paths instead of fully qualified URLs. The tester:
+1. Issues a warning with RFC reference and remediation
+2. Auto-constructs the proper URL for continued testing
+3. Displays expected vs actual values in debug output
 
 ### 4. OAuth 2.1 + PKCE Flow
 
@@ -228,6 +272,7 @@ When enabled, additional fields appear:
 - PRM not found but AS discovered via fallback (tests continue)
 - Server requires `refresh_token` grant (stricter than RFC 7591)
 - AS URL has trailing slash (violates RFC 8414)
+- Server returns relative `registration_client_uri` instead of fully qualified URL (RFC 7592 violation)
 
 ## Hierarchical Test Display
 
@@ -267,6 +312,17 @@ Tests are organized hierarchically with indentation:
 - Toggle switches (sliders) on left side of option text
 - Real-time test results display
 - Expandable details with RFC references and remediation guidance
+
+#### Test Results UI Features
+
+- **Collapsible Category Sections**: Each test category (aligned with MCP specification sections) can be independently collapsed/expanded
+- **Persistent State**: Section collapse/expand preferences are saved to localStorage and maintained across:
+  - Multiple test runs
+  - Browser sessions
+  - Page refreshes
+- **Visual Indicators**: Arrow icons (▼/▶) show section state
+- **Smooth Animations**: Category content expands/collapses with CSS transitions
+- **Filtering Support**: Collapsed state is maintained when using status filters (Pass/Fail/Warning/etc.)
 
 ## API Endpoints
 
@@ -404,19 +460,41 @@ For full compliance (no warnings):
 9. Include required endpoints: `authorization_endpoint`, `token_endpoint`
 10. Advertise PKCE: `code_challenge_methods_supported: ["S256"]`
 
-### Dynamic Client Registration (RFC 7591)
+### Dynamic Client Registration (RFC 7591/7592)
 11. Accept registration with only `authorization_code` grant
 12. Return **HTTP 201** (not 200) on success
 13. Include `client_id` in response
 14. Include `client_secret_expires_at` when issuing secrets
+15. Return **fully qualified URL** for `registration_client_uri` (RFC 7592)
 
 ### OAuth 2.1 + PKCE
-15. Validate PKCE code_challenge and code_verifier
-16. Return **state parameter unchanged**
-17. Issue **Bearer** access tokens
-18. Support RFC 8707 resource parameter (optional)
+16. Validate PKCE code_challenge and code_verifier
+17. Return **state parameter unchanged**
+18. Issue **Bearer** access tokens
+19. Support RFC 8707 resource parameter (optional)
 
 ## Recent Changes
+
+### Collapsible Test Result Sections (2025-12-03)
+- **Category Sections**: Test results organized by MCP specification sections with collapse/expand controls
+- **Persistent State**: Section preferences saved to localStorage and maintained across test runs
+- **Visual Indicators**: Arrow icons (▼ expanded, ▶ collapsed) positioned on left side of section headers
+- **Smooth Animations**: CSS transitions for collapsing/expanding sections
+- **Independent Control**: Each category can be collapsed/expanded independently
+- **Filter Compatible**: Collapsed state maintained when using result filters
+
+### Enhanced Debug Information (2025-11-27)
+- **Debug sections** now show full HTTP request/response details for failed tests
+- **Validation errors** include structured error details with field paths
+- **Expandable debug dropdowns** in UI: "Debug - Request Sent" and "Debug - Response Received"
+- **RFC 7592 validation** for `registration_client_uri` with auto-correction for relative URLs
+- **Error messages** now include both human-readable text and structured validation details
+
+### Unified Client Registration (MCP 2025-11-25)
+- **Priority-based registration**: Preregistration → Client ID Metadata → DCR
+- **Client ID Metadata Document** support (MCP 2025-11-25)
+- **New test IDs**: `client-reg-*` series replacing legacy `dcr-*` tests
+- **Backward compatibility**: Legacy test IDs still supported for rerunning individual tests
 
 ### JWT Access Token Validation (jwt-5.x)
 - Added complete JWT validation test category
