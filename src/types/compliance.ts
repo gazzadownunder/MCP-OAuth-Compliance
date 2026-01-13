@@ -53,6 +53,7 @@ export interface ComplianceTestResult {
       headers?: Record<string, string>;
       body?: unknown;
     };
+    [key: string]: unknown; // Allow additional debug properties
   };
 }
 
@@ -152,6 +153,12 @@ export interface ServerTestConfig {
   resourceParameter?: string;
   /** Optional: Tool name for scope challenge test (step-1.5) */
   privilegedToolName?: string;
+
+  // OAuth endpoints (for step-up auth and other flows)
+  /** Authorization endpoint URL */
+  authorizationEndpoint?: string;
+  /** Token endpoint URL */
+  tokenEndpoint?: string;
 
   // Preregistration client options (both protocols)
   preregisteredClient?: {

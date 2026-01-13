@@ -141,7 +141,7 @@ function base64UrlEncode(str: string): string {
  * @param privateKey - Private key in PEM format
  * @returns Signature bytes
  */
-async function signJWT(data: string, privateKey: string): Promise<string> {
+async function signJWT(data: string, _privateKey: string): Promise<string> {
   // This is a simplified placeholder
   // In production, you would:
   // 1. Parse the PEM private key
