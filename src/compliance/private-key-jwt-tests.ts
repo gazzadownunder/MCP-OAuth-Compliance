@@ -208,7 +208,7 @@ async function testClientMetadataJWKS(
       return;
     }
 
-    const metadata = await response.json();
+    const metadata = await response.json() as any;
     const usesPrivateKeyJWT = metadata.token_endpoint_auth_method === 'private_key_jwt';
 
     if (usesPrivateKeyJWT) {
