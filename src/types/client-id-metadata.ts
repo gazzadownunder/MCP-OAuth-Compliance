@@ -113,7 +113,7 @@ export function shouldUseHTTPS(clientId: string): { valid: boolean; reason?: str
  */
 export async function fetchClientIDMetadataDocument(
   clientId: string,
-  enableDebug: boolean = false
+  _enableDebug: boolean = false
 ): Promise<ClientIDMetadataDocument> {
   if (!isValidClientIDUrl(clientId)) {
     throw new Error(
@@ -131,7 +131,7 @@ export async function fetchClientIDMetadataDocument(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
+    await response.text(); // Consume body to avoid unread response
     throw new Error(
       `Failed to fetch Client ID Metadata Document: ${response.status} ${response.statusText}`
     );

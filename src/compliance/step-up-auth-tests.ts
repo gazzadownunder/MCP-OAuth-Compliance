@@ -382,8 +382,8 @@ async function performStepUpReauthorization(
     const clientId = config.clientId || config.clientIDMetadataUrl!;
 
     // Generate new PKCE parameters
-    const pkceParams = await generatePKCEParams('S256');
-    const state = Math.random().toString(36).substring(2, 15);
+    const pkceParams = generatePKCEParams();
+    const state = pkceParams.state;
 
     if (config.enableDebug) {
       debugInfo.step2_oauthParams = {
@@ -467,6 +467,19 @@ async function performStepUpReauthorization(
       console.log('Waiting for OAuth callback...');
       const authCode = await callbackServer.waitForCallback();
 
+      if (!authCode.code) {
+        results.push({
+          id: 'step-1.0.6',
+          category: ComplianceCategory.STEP_UP_AUTH,
+          requirement: 'Server returns authorization code',
+          status: 'fail',
+          message: authCode.error ? `OAuth error: ${authCode.error} - ${authCode.error_description || ''}` : 'No authorization code received',
+          timestamp: new Date(),
+          indentLevel: 2
+        });
+        return;
+      }
+
       if (authCode.state !== state) {
         results.push({
           id: 'step-1.0.6',
@@ -497,7 +510,8 @@ async function performStepUpReauthorization(
       });
 
       // Step 5: Exchange code for token
-      if (!config.tokenEndpoint) {
+      const tokenEndpoint = config.tokenEndpoint;
+      if (!tokenEndpoint) {
         results.push({
           id: 'step-1.0.7',
           category: ComplianceCategory.STEP_UP_AUTH,
@@ -511,7 +525,7 @@ async function performStepUpReauthorization(
       }
 
       const tokenResponse = await exchangeCodeForToken({
-        tokenEndpoint: config.tokenEndpoint,
+        tokenEndpoint,
         clientId,
         code: authCode.code,
         redirectUri: actualRedirectUri,

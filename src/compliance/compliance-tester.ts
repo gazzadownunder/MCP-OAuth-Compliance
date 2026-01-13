@@ -156,7 +156,7 @@ export class MCPComplianceTester {
         // Private Key JWT authentication tests
         const privateKeyJWTResults = await runPrivateKeyJWTTests(
           this.config,
-          asMetadata
+          asMetadata as AuthorizationServerMetadata | undefined
         );
         this.results.push(...privateKeyJWTResults);
       }
@@ -1132,7 +1132,7 @@ export class MCPComplianceTester {
 
     // Test 1.9: scopes_supported present (RECOMMENDED, not required)
     const hasScopes = Array.isArray(prmData.scopes_supported);
-    const scopesNotEmpty = hasScopes && prmData.scopes_supported.length > 0;
+    const scopesNotEmpty = hasScopes && (prmData.scopes_supported as string[]).length > 0;
     this.addResult({
       id: 'prm-1.9',
       category,
@@ -1497,69 +1497,6 @@ export class MCPComplianceTester {
   // 3. Dynamic Client Registration (RFC 7591)
   // ==================================================================
 
-  /**
-   * DEPRECATED: This method is replaced by runClientRegistrationTests()
-   * Kept for backward compatibility with rerunSingleTest()
-   */
-  private async testDynamicClientRegistration() {
-    // Determine protocol version
-    const protocolVersion = this.config.protocolVersion || ProtocolVersion.PRE_2025_11_25;
-
-    // Get authorization server
-    const authServer = this.cache.get('authorization_server') as string | undefined;
-
-    if (!authServer) {
-      this.addResult({
-        id: 'client-reg-error',
-        category: ComplianceCategory.CLIENT_REGISTRATION,
-        requirement: 'Client Registration',
-        status: 'fail',
-        message: 'No authorization server discovered'
-      });
-      return;
-    }
-
-    // Create DCR client (protocol-aware)
-    const dcrClient = new DCRClient({
-      transportType: 'http',
-      serverUrl: this.config.serverUrl,
-      protocolVersion
-    });
-
-    try {
-      await dcrClient.connect();
-    } catch (error) {
-      this.addResult({
-        id: 'client-reg-error',
-        category: ComplianceCategory.CLIENT_REGISTRATION,
-        requirement: 'Client Registration',
-        status: 'fail',
-        message: `DCR client connection failed: ${error instanceof Error ? error.message : String(error)}`
-      });
-      return;
-    }
-
-    // Use unified client registration tests
-    const asMetadata = this.cache.get('asMetadata') as Record<string, any> | undefined;
-    const { results, context } = await runClientRegistrationTests(
-      this.config,
-      dcrClient,
-      asMetadata
-    );
-
-    // Add all results
-    results.forEach(result => this.addResult(result));
-
-    // Store registration context
-    if (context) {
-      this.cache.set('client_registration', context);
-      this.cache.set('client_id', context.clientId);
-      this.cache.set('client_secret', context.clientSecret);
-      this.cache.set('redirect_uri', context.redirectUri);
-    }
-
-    return;
-  }
 
   // ==================================================================
   // 4. OAuth 2.1 + PKCE Flow
