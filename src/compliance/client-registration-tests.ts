@@ -519,32 +519,125 @@ async function runDynamicClientRegistrationTests(
 
     // Prepare client metadata
     const redirectUri = config.redirectUri || `http://localhost:${config.callbackPort || 3000}/callback`;
-    const clientMetadata: any = {
+    const baseMetadata: any = {
       client_name: 'MCP OAuth Compliance Tester',
       redirect_uris: [redirectUri],
-      grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       scope: config.scope || 'read write',
       token_endpoint_auth_method: 'none' // Public client
     };
 
-    // Register client
-    const response = await dcrClient.registerClient(clientMetadata);
+    // Try registration with only authorization_code first (RFC 7591 compliant)
+    let response: any;
 
-    results.push({
-      id: 'client-reg-3.2',
-      category: ComplianceCategory.CLIENT_REGISTRATION,
-      requirement: 'Client registration (RFC 7591)',
-      status: 'pass',
-      message: `Client registered: ${response.client_id}`,
-      timestamp: new Date(),
-      indentLevel: 2,
-      details: {
-        client_id: response.client_id,
-        client_secret: response.client_secret ? '***' : undefined,
-        registration_client_uri: response.registration_client_uri
+    try {
+      const clientMetadata = {
+        ...baseMetadata,
+        grant_types: ['authorization_code']
+      };
+
+      response = await dcrClient.registerClient(clientMetadata);
+
+      results.push({
+        id: 'client-reg-3.2',
+        category: ComplianceCategory.CLIENT_REGISTRATION,
+        requirement: 'Client registration with authorization_code only (RFC 7591)',
+        status: 'pass',
+        message: `Client registered: ${response.client_id}`,
+        timestamp: new Date(),
+        indentLevel: 2,
+        details: {
+          client_id: response.client_id,
+          client_secret: response.client_secret ? '***' : undefined,
+          registration_client_uri: response.registration_client_uri,
+          grant_types: ['authorization_code']
+        },
+        ...TEST_METADATA['dcr-3.2']
+      });
+    } catch (initialError) {
+      // First attempt failed, try fallback with refresh_token
+      results.push({
+        id: 'client-reg-3.2',
+        category: ComplianceCategory.CLIENT_REGISTRATION,
+        requirement: 'Client registration with authorization_code only',
+        status: 'fail',
+        message: `Registration with authorization_code only failed: ${initialError instanceof Error ? initialError.message : String(initialError)}`,
+        timestamp: new Date(),
+        indentLevel: 2,
+        details: {
+          error: initialError instanceof Error ? initialError.message : String(initialError),
+          grant_types_attempted: ['authorization_code']
+        },
+        ...TEST_METADATA['dcr-3.2']
+      });
+
+      // Try fallback with both authorization_code and refresh_token
+      try {
+        const fallbackMetadata = {
+          ...baseMetadata,
+          grant_types: ['authorization_code', 'refresh_token']
+        };
+
+        response = await dcrClient.registerClient(fallbackMetadata);
+
+        results.push({
+          id: 'dcr-3.2a',
+          category: ComplianceCategory.CLIENT_REGISTRATION,
+          requirement: 'Client registration fallback with refresh_token',
+          status: 'warning',
+          message: `FALLBACK: Client registered with refresh_token grant: ${response.client_id}`,
+          timestamp: new Date(),
+          indentLevel: 2,
+          details: {
+            client_id: response.client_id,
+            client_secret: response.client_secret ? '***' : undefined,
+            registration_client_uri: response.registration_client_uri,
+            grant_types: ['authorization_code', 'refresh_token'],
+            note: 'Server requires refresh_token grant type, which is stricter than RFC 7591 mandates'
+          },
+          ...TEST_METADATA['dcr-3.2a']
+        });
+      } catch (fallbackError) {
+        // Both attempts failed
+        const debugInfo = (fallbackError as any).debugInfo;
+        const validationErrors = (fallbackError as any).validationErrors;
+
+        let errorMessage = `Registration failed with both grant_types configurations: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`;
+
+        if (validationErrors && validationErrors.errors) {
+          const zodErrors = validationErrors.errors.map((e: any) => ({
+            validation: e.validation,
+            code: e.code,
+            message: e.message,
+            path: e.path
+          }));
+          errorMessage += `\n\nValidation errors: ${JSON.stringify(zodErrors, null, 2)}`;
+        }
+
+        results.push({
+          id: 'dcr-3.2a',
+          category: ComplianceCategory.CLIENT_REGISTRATION,
+          requirement: 'Client registration fallback with refresh_token',
+          status: 'fail',
+          message: errorMessage,
+          timestamp: new Date(),
+          indentLevel: 2,
+          details: validationErrors
+            ? {
+                validationErrors: validationErrors.errors?.map((e: any) => ({
+                  validation: e.validation,
+                  code: e.code,
+                  message: e.message,
+                  path: e.path
+                }))
+              }
+            : undefined,
+          debug: debugInfo,
+          ...TEST_METADATA['dcr-3.2a']
+        });
+        return { results };
       }
-    });
+    }
 
     // Validate registration_client_uri format (RFC 7592)
     if (response.registration_client_uri) {
